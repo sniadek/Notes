@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9e9 e7;background:#eceae6;font-family:-apple-system,"SF Pro Text","SF Pro Display",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  .dv-intro{padding:34px 44px 6px;max-width:1180px}
+  .dv-intro h1{font:600 19px/1.3 -apple-system,system-ui,sans-serif;color:#1d1d1f;margin:0 0 8px}
+  .dv-intro p{font:400 13.5px/1.6 -apple-system,system-ui,sans-serif;color:#6e6e73;margin:0;max-width:760px}
+  .dv-turn{padding:24px 44px 34px;scroll-margin-top:16px}
+  .dv-thd{display:flex;align-items:baseline;gap:10px;margin:14px 0 22px}
+  .dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px;text-decoration:none}
+  .dv-tname{font:600 13px/1.2 -apple-system,system-ui,sans-serif;color:#1d1d1f}
+  .dv-opts{display:flex;flex-direction:column;gap:46px;align-items:flex-start}
+  .dv-opt{display:flex;flex-direction:column;gap:11px;scroll-margin-top:16px;max-width:100%}
+  .dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.07);color:#1d1d1f;border-radius:5px;text-decoration:none}
+  .dv-olabel{display:flex;align-items:baseline;gap:9px;font:400 12px/1.4 -apple-system,system-ui,sans-serif;color:#86868b}
+  .dv-olabel b{color:#1d1d1f;font-weight:600}
+  .dv-opt:target .dv-oid{background:#0a84ff;color:#fff}
+  .dv-next{margin:30px 0 0;font:13px/1.6 -apple-system,system-ui,sans-serif;color:#86868b;max-width:1180px}
+  .dv-next a{text-decoration:none}
+  /* window shell */
+  .win{width:1180px;border-radius:11px;overflow:hidden;box-shadow:0 28px 70px -20px rgba(0,0,0,.42),0 2px 8px rgba(0,0,0,.12);border:1px solid rgba(0,0,0,.1);background:#fff}
+  .tl{width:12px;height:12px;border-radius:50%}
+  .scroll::-webkit-scrollbar{width:9px;height:9px}
+  .scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+</style>
+</helmet>
+
+<div class="dv-intro">
+  <h1>macOS Notes — three directions for the main editor</h1>
+  <p>All native-feeling, SF font, light, neutral grays, with a collapsible sidebar that fuses a folder tree and smart file-type filters. They differ in structure, density and how much they lean "developer tool." Pick one (or mix) and I'll build the full interactive prototype: collapsed sidebar, ⌘K command palette, HTML live preview, Outlook template editor, and settings.</p>
+</div>
+
+<section class="dv-turn" id="t1">
+  <div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Main editor — three directions</span></div>
+  <div class="dv-opts">
+
+    <!-- ============ 1a : Classic three-pane ============ -->
+    <div class="dv-opt" id="1a">
+      <div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a><b>Classic three-pane</b> · sidebar + note list + editor, Apple-Notes familiar, blue selection</div>
+      <div class="win">
+        <!-- unified toolbar -->
+        <div style="display:flex;align-items:center;height:52px;background:#f6f6f5;border-bottom:1px solid rgba(0,0,0,.09)">
+          <div style="width:216px;display:flex;align-items:center;gap:16px;padding:0 16px;border-right:1px solid rgba(0,0,0,.06);height:100%">
+            <div style="display:flex;gap:8px"><span class="tl" style="background:#ff5f57"></span><span class="tl" style="background:#febc2e"></span><span class="tl" style="background:#28c840"></span></div>
+            <div style="margin-left:auto;display:flex;gap:14px;color:#86868b;font-size:15px">
+              <span title="Collapse sidebar" style="cursor:default">⊟</span>
+            </div>
+          </div>
+          <div style="width:300px;display:flex;align-items:center;padding:0 14px;border-right:1px solid rgba(0,0,0,.06);height:100%">
+            <div style="flex:1;height:28px;border-radius:7px;background:#e9e9e7;display:flex;align-items:center;padding:0 10px;gap:7px;color:#9b9b9f;font-size:12.5px"><span>⌕</span><span>Search</span><span style="margin-left:auto;font:600 10px ui-monospace,Menlo,monospace;color:#b3b3b6">⌘K</span></div>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;gap:10px;padding:0 16px;height:100%">
+            <div style="font:600 13px -apple-system,system-ui;color:#1d1d1f">API Design Guidelines</div>
+            <span style="font:600 9.5px ui-monospace,Menlo,monospace;color:#5b6573;background:#eceef1;padding:2px 5px;border-radius:4px">MD</span>
+            <div style="margin-left:auto;display:flex;background:#e9e9e7;border-radius:7px;padding:2px;font-size:12px;font-weight:500">
+              <span style="padding:4px 11px;border-radius:5px;color:#5c5c60">Edit</span>
+              <span style="padding:4px 11px;border-radius:5px;background:#fff;color:#1d1d1f;box-shadow:0 1px 2px rgba(0,0,0,.12)">Preview</span>
+            </div>
+            <span style="color:#86868b;font-size:16px;margin-left:4px">⌗</span>
+          </div>
+        </div>
+        <!-- body -->
+        <div style="display:flex;height:600px">
+          <!-- sidebar -->
+          <div class="scroll" style="width:216px;background:#f1f1ef;border-right:1px solid rgba(0,0,0,.07);overflow:auto;padding:10px 8px;flex:none">
+            <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#a0a0a5;letter-spacing:.04em;padding:6px 8px 4px">SMART FILTERS</div>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;font-size:12.5px;color:#3a3a3c"><span style="width:7px;height:7px;border-radius:2px;background:#8e8e93"></span>All Notes<span style="margin-left:auto;font-size:11px;color:#b0b0b4">128</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;font-size:12.5px;color:#3a3a3c"><span style="width:7px;height:7px;border-radius:2px;background:#6c7686"></span>Markdown<span style="margin-left:auto;font-size:11px;color:#b0b0b4">86</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;font-size:12.5px;color:#3a3a3c"><span style="width:7px;height:7px;border-radius:2px;background:#b5651d"></span>HTML<span style="margin-left:auto;font-size:11px;color:#b0b0b4">22</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;font-size:12.5px;color:#3a3a3c"><span style="width:7px;height:7px;border-radius:2px;background:#3a6ea5"></span>Email Templates<span style="margin-left:auto;font-size:11px;color:#b0b0b4">20</span></div>
+              <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:6px;font-size:12.5px;color:#3a3a3c"><span style="color:#d6a419">★</span>Pinned<span style="margin-left:auto;font-size:11px;color:#b0b0b4">6</span></div>
+            </div>
+            <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#a0a0a5;letter-spacing:.04em;padding:14px 8px 4px">FOLDERS</div>
+            <div style="display:flex;flex-direction:column;gap:1px;font-size:12.5px;color:#3a3a3c">
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px"><span style="color:#b0b0b4;font-size:9px">▾</span><svg width="14" height="14" viewBox="0 0 16 16"><path d="M1.5 4.6c0-.6.4-1 1-1h3.1c.3 0 .5.1.7.3l.8.8c.2.2.4.3.7.3h5.2c.6 0 1 .4 1 1v5.7c0 .6-.4 1-1 1H2.5c-.6 0-1-.4-1-1z" fill="#86b6e0"/></svg>Engineering</div>
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px 5px 30px;color:#6e6e73"><span style="font:600 8px ui-monospace,Menlo;color:#5b6573;background:#eceef1;padding:1px 3px;border-radius:3px">MD</span>Deployment Runbook</div>
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px 5px 30px;color:#6e6e73"><span style="font:600 8px ui-monospace,Menlo;color:#5b6573;background:#eceef1;padding:1px 3px;border-radius:3px">MD</span>ADR-014 Event Bus</div>
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px"><span style="color:#b0b0b4;font-size:9px">▸</span><svg width="14" height="14" viewBox="0 0 16 16"><path d="M1.5 4.6c0-.6.4-1 1-1h3.1c.3 0 .5.1.7.3l.8.8c.2.2.4.3.7.3h5.2c.6 0 1 .4 1 1v5.7c0 .6-.4 1-1 1H2.5c-.6 0-1-.4-1-1z" fill="#86b6e0"/></svg>Web</div>
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px"><span style="color:#b0b0b4;font-size:9px">▾</span><svg width="14" height="14" viewBox="0 0 16 16"><path d="M1.5 4.6c0-.6.4-1 1-1h3.1c.3 0 .5.1.7.3l.8.8c.2.2.4.3.7.3h5.2c.6 0 1 .4 1 1v5.7c0 .6-.4 1-1 1H2.5c-.6 0-1-.4-1-1z" fill="#86b6e0"/></svg>Reports</div>
+              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px 5px 30px;color:#6e6e73"><span style="font:600 8px ui-monospace,Menlo;color:#3a6ea5;background:#e7eef6;padding:1px 3px;border-radius:3px">EML</span>Q2 Status Report</div>
+            </div>
+          </div>
+          <!-- note list -->
+          <div class="scroll" style="width:300px;background:#fbfbfa;border-right:1px solid rgba(0,0,0,.07);overflow:auto;flex:none">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px"><span style="font:600 13px -apple-system,system-ui;color:#1d1d1f">Engineering</span><span style="font-size:11px;color:#b0b0b4">3 notes</span></div>
+            <!-- selected -->
+            <div style="margin:0 8px 4px;padding:10px 12px;border-radius:8px;background:#0a84ff">
+              <div style="display:flex;align-items:center;gap:7px"><span style="font-weight:600;font-size:13px;color:#fff">API Design Guidelines</span><span style="margin-left:auto;color:#fff;opacity:.8">★</span></div>
+              <div style="font-size:11.5px;color:rgba(255,255,255,.85);margin-top:3px;line-height:1.45">All public endpoints are versioned via the URL path. Breaking changes…</div>
+              <div style="font-size:10.5px;color:rgba(255,255,255,.7);margin-top:6px">2h ago · 4 backlinks</div>
+            </div>
+            <div style="margin:0 8px 4px;padding:10px 12px;border-radius:8px">
+              <div style="display:flex;align-items:center;gap:7px"><span style="font-weight:600;font-size:13px;color:#1d1d1f">Deployment Runbook</span></div>
+              <div style="font-size:11.5px;color:#86868b;margin-top:3px;line-height:1.45">Step-by-step rollout for the staging → prod promotion pipeline…</div>
+              <div style="font-size:10.5px;color:#b0b0b4;margin-top:6px">Yesterday · 2 backlinks</div>
+            </div>
+            <div style="margin:0 8px 4px;padding:10px 12px;border-radius:8px">
+              <div style="display:flex;align-items:center;gap:7px"><span style="font-weight:600;font-size:13px;color:#1d1d1f">ADR-014 Event Bus</span></div>
+              <div style="font-size:11.5px;color:#86868b;margin-top:3px;line-height:1.45">Decision: adopt an internal event bus over point-to-point calls…</div>
+              <div style="font-size:10.5px;color:#b0b0b4;margin-top:6px">Mar 14 · 1 backlink</div>
+            </div>
+          </div>
+          <!-- editor -->
+          <div class="scroll" style="flex:1;background:#fff;overflow:auto;padding:40px 56px">
+            <div style="max-width:620px">
+              <div style="font:500 11.5px ui-monospace,Menlo,monospace;color:#b0b0b4;margin-bottom:14px">Engineering / API Design Guidelines.md</div>
+              <h1 style="font:700 30px/1.2 -apple-system,system-ui;color:#1d1d1f;margin:0 0 8px;letter-spacing:-.01em">API Design Guidelines</h1>
+              <div style="font-size:12.5px;color:#a0a0a5;margin-bottom:28px">Edited 2 hours ago · 1,240 words · 4 backlinks</div>
+              <h2 style="font:600 19px -apple-system,system-ui;color:#1d1d1f;margin:0 0 10px">Versioning</h2>
+              <p style="font:400 15px/1.7 -apple-system,system-ui;color:#3a3a3c;margin:0 0 16px">All public endpoints are versioned via the URL path. Breaking changes require a new major version — see <span style="color:#0a84ff;background:rgba(10,132,255,.1);padding:1px 5px;border-radius:4px;font-weight:500">Deprecation Policy</span> before removing fields.</p>
+              <div style="background:#f6f6f5;border:1px solid rgba(0,0,0,.07);border-radius:9px;padding:14px 16px;font:13px/1.7 ui-monospace,Menlo,monospace;color:#1d1d1f;margin:0 0 18px"><span style="color:#9b59b6">GET</span> /api/v2/users/:id<br><span style="color:#86868b">Accept: application/json</span></div>
+              <h2 style="font:600 19px -apple-system,system-ui;color:#1d1d1f;margin:0 0 10px">Conventions</h2>
+              <ul style="font:400 15px/1.8 -apple-system,system-ui;color:#3a3a3c;margin:0;padding-left:22px">
+                <li>Use plural, lowercase resource names (<code style="font:13px ui-monospace,Menlo;background:#f0f0ee;padding:1px 5px;border-radius:4px">/invoices</code>)</li>
+                <li>Return ISO-8601 timestamps in UTC</li>
+                <li>Paginate with <code style="font:13px ui-monospace,Menlo;background:#f0f0ee;padding:1px 5px;border-radius:4px">cursor</code>, never offset</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 1b : Developer / IDE ============ -->
+    <div class="dv-opt" id="1b">
+      <div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a><b>Developer tabs + split</b> · tabbed files, source∕preview split, monospace tree, graphite selection</div>
+      <div class="win">
+        <!-- toolbar -->
+        <div style="display:flex;align-items:center;height:48px;background:#f0f0ee;border-bottom:1px solid rgba(0,0,0,.1)">
+          <div style="width:264px;display:flex;align-items:center;gap:16px;padding:0 15px;height:100%">
+            <div style="display:flex;gap:8px"><span class="tl" style="background:#ff5f57"></span><span class="tl" style="background:#febc2e"></span><span class="tl" style="background:#28c840"></span></div>
+            <span style="margin-left:auto;color:#9b9b9f;font-size:15px">⊟</span>
+            <span style="color:#9b9b9f;font-size:16px">＋</span>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;gap:10px;padding:0 14px;height:100%;border-left:1px solid rgba(0,0,0,.07)">
+            <div style="flex:1;max-width:340px;height:26px;border-radius:6px;background:#e4e4e2;display:flex;align-items:center;padding:0 9px;gap:7px;color:#9b9b9f;font-size:12px"><span>⌕</span>Go to file or command<span style="margin-left:auto;font:600 9.5px ui-monospace,Menlo;color:#b3b3b6">⌘K</span></div>
+            <div style="margin-left:auto;display:flex;background:#e4e4e2;border-radius:6px;padding:2px;font:500 11.5px ui-monospace,Menlo,monospace">
+              <span style="padding:3px 9px;border-radius:4px;background:#fff;color:#1d1d1f;box-shadow:0 1px 2px rgba(0,0,0,.1)">source</span>
+              <span style="padding:3px 9px;border-radius:4px;color:#6c6c70">split</span>
+              <span style="padding:3px 9px;border-radius:4px;color:#6c6c70">preview</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;height:604px">
+          <!-- tree -->
+          <div class="scroll" style="width:264px;background:#f7f7f6;border-right:1px solid rgba(0,0,0,.09);overflow:auto;padding:8px 6px;flex:none;font:12.5px/1 ui-monospace,Menlo,monospace">
+            <div style="display:flex;gap:6px;padding:4px 8px 10px;flex-wrap:wrap">
+              <span style="font-size:10.5px;padding:3px 8px;border-radius:11px;background:#1d1d1f;color:#fff">All</span>
+              <span style="font-size:10.5px;padding:3px 8px;border-radius:11px;background:#e4e4e2;color:#5c5c60">.md</span>
+              <span style="font-size:10.5px;padding:3px 8px;border-radius:11px;background:#e4e4e2;color:#5c5c60">.html</span>
+              <span style="font-size:10.5px;padding:3px 8px;border-radius:11px;background:#e4e4e2;color:#5c5c60">.eml</span>
+            </div>
+            <div style="display:flex;flex-direction:column;color:#3a3a3c">
+              <div style="display:flex;align-items:center;gap:5px;padding:4px 8px"><span style="color:#b0b0b4;font-size:9px">▾</span>📁 engineering</div>
+              <div style="padding:4px 8px 4px 28px;background:#e2e2e0;border-radius:5px;color:#1d1d1f;display:flex;align-items:center;gap:6px;border-left:2px solid #6c6c70">api-design.md</div>
+              <div style="padding:4px 8px 4px 28px;color:#6e6e73">deployment.md</div>
+              <div style="padding:4px 8px 4px 28px;color:#6e6e73">adr-014.md</div>
+              <div style="display:flex;align-items:center;gap:5px;padding:4px 8px"><span style="color:#b0b0b4;font-size:9px">▾</span>📁 web</div>
+              <div style="padding:4px 8px 4px 28px;color:#6e6e73">landing-page.html</div>
+              <div style="padding:4px 8px 4px 28px;color:#6e6e73">signature.html</div>
+              <div style="display:flex;align-items:center;gap:5px;padding:4px 8px"><span style="color:#b0b0b4;font-size:9px">▾</span>📁 reports</div>
+              <div style="padding:4px 8px 4px 28px;color:#6e6e73">q2-status.eml</div>
+              <div style="padding:4px 8px 4px 28px;color:#6e6e73">weekly-digest.eml</div>
+            </div>
+          </div>
+          <!-- main: tabs + split -->
+          <div style="flex:1;display:flex;flex-direction:column;background:#fff;min-width:0">
+            <!-- tab bar -->
+            <div style="display:flex;align-items:stretch;height:38px;background:#efefed;border-bottom:1px solid rgba(0,0,0,.09);font:12px ui-monospace,Menlo,monospace">
+              <div style="display:flex;align-items:center;gap:7px;padding:0 14px;background:#fff;border-right:1px solid rgba(0,0,0,.09);color:#1d1d1f"><span style="font:600 8px ui-monospace;color:#5b6573;background:#eceef1;padding:1px 3px;border-radius:3px">MD</span>api-design.md<span style="color:#b0b0b4;margin-left:3px">×</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:0 14px;border-right:1px solid rgba(0,0,0,.06);color:#86868b"><span style="font:600 8px ui-monospace;color:#b5651d;background:#f6ede2;padding:1px 3px;border-radius:3px">HT</span>landing-page.html<span style="margin-left:3px">×</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:0 14px;border-right:1px solid rgba(0,0,0,.06);color:#86868b"><span style="font:600 8px ui-monospace;color:#3a6ea5;background:#e7eef6;padding:1px 3px;border-radius:3px">EM</span>q2-status.eml<span style="margin-left:3px">×</span></div>
+            </div>
+            <!-- split -->
+            <div style="flex:1;display:flex;min-height:0">
+              <!-- source -->
+              <div class="scroll" style="flex:1;overflow:auto;padding:18px 0 18px 0;border-right:1px solid rgba(0,0,0,.08);font:13px/1.85 ui-monospace,Menlo,monospace;min-width:0">
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">1</span><span style="color:#9b59b6"># API Design Guidelines</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">2</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">3</span><span style="color:#2563aa">## Versioning</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">4</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">5</span><span style="color:#3a3a3c">All endpoints are versioned via</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">6</span><span style="color:#3a3a3c">the URL path. See </span><span style="color:#0a84ff">[[Deprecation Policy]]</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">7</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">8</span><span style="color:#c4c4c8">```</span><span style="color:#1a8a4f">http</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">9</span><span style="color:#9b59b6">GET</span><span style="color:#3a3a3c"> /api/v2/users/:id</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">10</span><span style="color:#c4c4c8">```</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">11</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">12</span><span style="color:#2563aa">## Conventions</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">13</span><span style="color:#3a3a3c">- Plural resource names</span></div>
+                <div style="display:flex"><span style="width:42px;text-align:right;padding-right:14px;color:#c4c4c8;flex:none">14</span><span style="color:#3a3a3c">- ISO-8601 timestamps in UTC</span></div>
+              </div>
+              <!-- preview -->
+              <div class="scroll" style="flex:1;overflow:auto;padding:22px 30px;min-width:0">
+                <h1 style="font:700 23px/1.2 -apple-system,system-ui;color:#1d1d1f;margin:0 0 14px">API Design Guidelines</h1>
+                <h2 style="font:600 16px -apple-system,system-ui;color:#1d1d1f;margin:0 0 8px">Versioning</h2>
+                <p style="font:400 13.5px/1.65 -apple-system,system-ui;color:#3a3a3c;margin:0 0 14px">All endpoints are versioned via the URL path. See <span style="color:#0a84ff;background:rgba(10,132,255,.1);padding:1px 4px;border-radius:4px">Deprecation Policy</span></p>
+                <div style="background:#f6f6f5;border:1px solid rgba(0,0,0,.07);border-radius:8px;padding:11px 13px;font:12px/1.6 ui-monospace,Menlo;color:#1d1d1f;margin:0 0 14px"><span style="color:#9b59b6">GET</span> /api/v2/users/:id</div>
+                <h2 style="font:600 16px -apple-system,system-ui;color:#1d1d1f;margin:0 0 8px">Conventions</h2>
+                <ul style="font:400 13.5px/1.7 -apple-system,system-ui;color:#3a3a3c;margin:0;padding-left:20px"><li>Plural resource names</li><li>ISO-8601 timestamps in UTC</li></ul>
+              </div>
+            </div>
+            <!-- status bar -->
+            <div style="display:flex;align-items:center;gap:16px;height:24px;background:#f0f0ee;border-top:1px solid rgba(0,0,0,.08);padding:0 14px;font:11px ui-monospace,Menlo,monospace;color:#86868b">
+              <span>Markdown</span><span>UTF-8</span><span>Ln 6, Col 18</span><span style="margin-left:auto">4 backlinks</span><span>1,240 words</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 1c : Editorial + context panel ============ -->
+    <div class="dv-opt" id="1c">
+      <div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a><b>Editorial + context rail</b> · roomy centered writing, right-side outline & backlinks, one soft indigo accent</div>
+      <div class="win">
+        <div style="display:flex;align-items:center;height:54px;background:#faf9f7;border-bottom:1px solid rgba(0,0,0,.08)">
+          <div style="width:240px;display:flex;align-items:center;gap:16px;padding:0 17px;height:100%">
+            <div style="display:flex;gap:8px"><span class="tl" style="background:#ff5f57"></span><span class="tl" style="background:#febc2e"></span><span class="tl" style="background:#28c840"></span></div>
+            <span style="margin-left:auto;color:#a8a29a;font-size:15px">⊟</span>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;gap:12px;padding:0 22px;height:100%">
+            <div style="flex:1;max-width:380px;height:30px;border-radius:8px;background:#f0eee9;display:flex;align-items:center;padding:0 11px;gap:8px;color:#a8a29a;font-size:12.5px"><span>⌕</span>Search notes & backlinks<span style="margin-left:auto;font:600 10px ui-monospace,Menlo;color:#bdb8af">⌘K</span></div>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:14px;color:#8a8a8f;font-size:12.5px">
+              <span style="display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:oklch(0.62 0.12 264)"></span>Edited</span>
+              <span style="padding:5px 13px;border-radius:8px;border:1px solid rgba(0,0,0,.12);font-weight:500;color:#3a3a3c">Preview</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;height:598px">
+          <!-- sidebar -->
+          <div class="scroll" style="width:240px;background:#f7f5f1;border-right:1px solid rgba(0,0,0,.06);overflow:auto;padding:16px 10px;flex:none">
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:8px;font-size:13px;color:#4a4a4c">All Notes<span style="margin-left:auto;font-size:11px;color:#bdb8af">128</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:8px;font-size:13px;color:#4a4a4c"><span style="color:#d6a419">★</span>Pinned<span style="margin-left:auto;font-size:11px;color:#bdb8af">6</span></div>
+            </div>
+            <div style="font:600 10.5px ui-monospace,Menlo;color:#b5b0a6;letter-spacing:.05em;padding:18px 11px 6px">TYPES</div>
+            <div style="display:flex;flex-direction:column;gap:1px;font-size:13px;color:#4a4a4c">
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:8px"><span style="width:8px;height:8px;border-radius:2px;background:#6c7686"></span>Markdown<span style="margin-left:auto;font-size:11px;color:#bdb8af">86</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:8px"><span style="width:8px;height:8px;border-radius:2px;background:#b5651d"></span>HTML<span style="margin-left:auto;font-size:11px;color:#bdb8af">22</span></div>
+              <div style="display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:8px"><span style="width:8px;height:8px;border-radius:2px;background:#3a6ea5"></span>Email<span style="margin-left:auto;font-size:11px;color:#bdb8af">20</span></div>
+            </div>
+            <div style="font:600 10.5px ui-monospace,Menlo;color:#b5b0a6;letter-spacing:.05em;padding:18px 11px 6px">FOLDERS</div>
+            <div style="display:flex;flex-direction:column;gap:1px;font-size:13px;color:#4a4a4c">
+              <div style="padding:7px 11px;border-radius:8px;background:oklch(0.95 0.025 264);color:oklch(0.45 0.11 264);font-weight:500">Engineering</div>
+              <div style="padding:7px 11px;border-radius:8px">Web</div>
+              <div style="padding:7px 11px;border-radius:8px">Reports</div>
+            </div>
+          </div>
+          <!-- editor centered -->
+          <div class="scroll" style="flex:1;background:#fffefb;overflow:auto;padding:48px 40px;min-width:0">
+            <div style="max-width:600px;margin:0 auto">
+              <div style="font:500 11.5px ui-monospace,Menlo;color:oklch(0.6 0.1 264);margin-bottom:16px;letter-spacing:.02em">ENGINEERING</div>
+              <h1 style="font:700 33px/1.18 -apple-system,system-ui;color:#26241f;margin:0 0 10px;letter-spacing:-.015em">API Design Guidelines</h1>
+              <div style="font-size:12.5px;color:#a8a29a;margin-bottom:34px">Edited 2 hours ago · 1,240 words</div>
+              <h2 style="font:600 20px -apple-system,system-ui;color:#26241f;margin:0 0 12px">Versioning</h2>
+              <p style="font:400 15.5px/1.75 -apple-system,system-ui;color:#403d37;margin:0 0 18px">All public endpoints are versioned via the URL path. Breaking changes require a new major version — see <span style="color:oklch(0.5 0.12 264);border-bottom:1.5px solid oklch(0.8 0.08 264);font-weight:500">Deprecation Policy</span> before removing fields.</p>
+              <div style="background:#faf8f3;border:1px solid rgba(0,0,0,.06);border-left:3px solid oklch(0.7 0.1 264);border-radius:0 8px 8px 0;padding:15px 18px;font:13.5px/1.7 ui-monospace,Menlo;color:#26241f;margin:0 0 20px"><span style="color:oklch(0.5 0.14 295)">GET</span> /api/v2/users/:id</div>
+              <h2 style="font:600 20px -apple-system,system-ui;color:#26241f;margin:0 0 12px">Conventions</h2>
+              <ul style="font:400 15.5px/1.85 -apple-system,system-ui;color:#403d37;margin:0;padding-left:22px"><li>Plural, lowercase resource names</li><li>ISO-8601 timestamps in UTC</li><li>Cursor pagination, never offset</li></ul>
+            </div>
+          </div>
+          <!-- context rail -->
+          <div class="scroll" style="width:248px;background:#faf9f6;border-left:1px solid rgba(0,0,0,.06);overflow:auto;padding:24px 18px;flex:none">
+            <div style="font:600 10.5px ui-monospace,Menlo;color:#b5b0a6;letter-spacing:.05em;margin-bottom:12px">OUTLINE</div>
+            <div style="display:flex;flex-direction:column;gap:7px;font-size:12.5px;margin-bottom:28px">
+              <span style="color:oklch(0.45 0.11 264);font-weight:500">Versioning</span>
+              <span style="color:#8a8a8f">Conventions</span>
+              <span style="color:#8a8a8f;padding-left:12px">Resource naming</span>
+              <span style="color:#8a8a8f">Error format</span>
+            </div>
+            <div style="font:600 10.5px ui-monospace,Menlo;color:#b5b0a6;letter-spacing:.05em;margin-bottom:12px">BACKLINKS · 4</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="padding:10px 12px;background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:9px"><div style="font-size:12px;font-weight:600;color:#26241f">Deployment Runbook</div><div style="font-size:11px;color:#a8a29a;margin-top:3px;line-height:1.4">"…follows the API Design Guidelines for…"</div></div>
+              <div style="padding:10px 12px;background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:9px"><div style="font-size:12px;font-weight:600;color:#26241f">ADR-014 Event Bus</div><div style="font-size:11px;color:#a8a29a;margin-top:3px;line-height:1.4">"…per the guidelines, v2 endpoints…"</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p class="dv-next">Tell me which to build out — e.g. "build <a class="dv-oid" href="#1a">1a</a> as the full prototype", "I like <a class="dv-oid" href="#1b">1b</a> but warmer like <a class="dv-oid" href="#1c">1c</a>", or "combine <a class="dv-oid" href="#1b">1b</a>'s tabs with <a class="dv-oid" href="#1a">1a</a>'s three-pane". Then I'll add the collapsed sidebar, ⌘K palette, HTML preview, Outlook editor & settings.</p>
+</section>
+</x-dc>
+</body>
+</html>

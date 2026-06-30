@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:#eceae6;font-family:-apple-system,"SF Pro Text",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  textarea{font-family:ui-monospace,Menlo,monospace}
+  .sc::-webkit-scrollbar{width:9px;height:9px}
+  .sc::-webkit-scrollbar-thumb{background:rgba(0,0,0,.16);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+  .sc::-webkit-scrollbar-track{background:transparent}
+  @keyframes pop{from{transform:translateY(-8px) scale(.985)}to{transform:none}}
+  @keyframes fade{from{opacity:.55}to{opacity:1}}
+  @keyframes rise{from{transform:translateY(8px)}to{transform:none}}
+  .katex{font-size:1.05em}
+  .mmd svg{max-width:100%;height:auto}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+</helmet>
+
+<div style="height:100vh;display:flex;flex-direction:column;overflow:hidden;background:#fffefb;color:#26241f">
+
+  <!-- ================= TOOLBAR ================= -->
+  <div style="display:flex;align-items:center;height:52px;background:#faf9f7;border-bottom:1px solid rgba(0,0,0,.08);flex:none;padding:0 16px;gap:14px">
+    <div style="display:flex;gap:8px;flex:none"><span style="width:12px;height:12px;border-radius:50%;background:#ff5f57"></span><span style="width:12px;height:12px;border-radius:50%;background:#febc2e"></span><span style="width:12px;height:12px;border-radius:50%;background:#28c840"></span></div>
+    <div onClick="{{ toggleSidebar }}" title="Toggle sidebar (⌘\)" style="display:flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:7px;cursor:pointer;flex:none" style-hover="background:#efece6">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5" stroke="#8a8a8f" stroke-width="1.3"></rect><line x1="6" y1="2.8" x2="6" y2="13.2" stroke="#8a8a8f" stroke-width="1.3"></line></svg>
+    </div>
+    <div onClick="{{ openPalette }}" style="flex:1;max-width:440px;height:30px;border-radius:8px;background:#f0eee9;display:flex;align-items:center;padding:0 12px;gap:9px;color:#a8a29a;font-size:12.5px;cursor:text" style-hover="background:#ebe8e1">
+      <span style="font-size:13px">⌕</span>Go to file or command<span style="margin-left:auto;font:600 10px ui-monospace,Menlo,monospace;color:#bdb8af;background:#fffefb;border:1px solid rgba(0,0,0,.07);padding:2px 6px;border-radius:5px">⌘K</span>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:12px;flex:none">
+      <div style="display:flex;background:#f0eee9;border-radius:8px;padding:2px;font:500 11.5px ui-monospace,Menlo,monospace">
+        <sc-for list="{{ viewBtns }}" as="b" hint-placeholder-count="3"><span onClick="{{ b.onClick }}" style="{{ b.style }}">{{ b.label }}</span></sc-for>
+      </div>
+      <div onClick="{{ openCapture }}" title="Quick capture (⌘⇧N)" style="display:flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:7px;cursor:pointer;color:#8a8a8f;font-size:15px" style-hover="background:#efece6">✎</div>
+      <div onClick="{{ openGraph }}" title="Graph view (⌘G)" style="display:flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:7px;cursor:pointer;color:#8a8a8f;font-size:16px" style-hover="background:#efece6">⬡</div>
+      <div onClick="{{ toggleRail }}" title="Toggle right sidebar (⌘⇧\)" style="{{ railBtnStyle }}" style-hover="background:#efece6">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="2.5" width="13" height="11" rx="2.5" stroke="#8a8a8f" stroke-width="1.3"></rect><line x1="10" y1="2.8" x2="10" y2="13.2" stroke="#8a8a8f" stroke-width="1.3"></line></svg>
+      </div>
+      <div onClick="{{ openSettings }}" title="Settings" style="display:flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:7px;cursor:pointer;color:#8a8a8f;font-size:16px" style-hover="background:#efece6">⚙</div>
+    </div>
+  </div>
+
+  <!-- ================= BODY ================= -->
+  <div style="flex:1;display:flex;min-height:0">
+
+    <!-- ----- SIDEBAR (expanded) ----- -->
+    <sc-if value="{{ sidebarExpanded }}" hint-placeholder-val="{{ true }}">
+    <div class="sc" style="width:248px;background:#f7f5f1;border-right:1px solid rgba(0,0,0,.06);overflow:auto;flex:none;padding:14px 10px">
+      <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;padding:4px 11px 7px">SMART FILTERS</div>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="5">
+        <div onClick="{{ f.onClick }}" style="{{ f.rowStyle }}">
+          <span style="{{ f.markStyle }}">{{ f.markText }}</span><span style="flex:1">{{ f.label }}</span><span style="{{ f.countStyle }}">{{ f.count }}</span>
+        </div>
+        </sc-for>
+      </div>
+
+      <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;padding:18px 11px 7px">FOLDERS</div>
+      <sc-for list="{{ folders }}" as="g" hint-placeholder-count="3">
+      <div style="margin-bottom:2px">
+        <div style="display:flex;align-items:center;gap:7px;padding:5px 11px;font-size:12.5px;color:#4a4a4c">
+          <span style="color:#bdb8af;font-size:9px">▾</span>
+          <svg width="14" height="14" viewBox="0 0 16 16" style="flex:none"><path d="M1.5 4.6c0-.6.4-1 1-1h3.1c.3 0 .5.1.7.3l.8.8c.2.2.4.3.7.3h5.2c.6 0 1 .4 1 1v5.7c0 .6-.4 1-1 1H2.5c-.6 0-1-.4-1-1z" fill="#c9b89a"></path></svg>
+          <span style="font-weight:500">{{ g.name }}</span>
+        </div>
+        <sc-for list="{{ g.files }}" as="file" hint-placeholder-count="2">
+        <div onClick="{{ file.onOpen }}" style="{{ file.rowStyle }}">
+          <span onClick="{{ file.onToggle }}" style="{{ file.caretStyle }}">{{ file.caret }}</span><span style="{{ file.badgeStyle }}">{{ file.badge }}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ file.title }}</span><span style="{{ file.starStyle }}">{{ file.star }}</span>
+        </div>
+        </sc-for>
+      </div>
+      </sc-for>
+
+      <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;padding:18px 11px 7px">TAGS</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;padding:0 11px">
+        <sc-for list="{{ tagItems }}" as="t" hint-placeholder-count="5"><span onClick="{{ t.onClick }}" style="{{ t.style }}">#{{ t.label }}<span style="opacity:.6">{{ t.count }}</span></span></sc-for>
+      </div>
+
+      <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;padding:18px 11px 7px">RECENTLY EDITED</div>
+      <div style="display:flex;flex-direction:column;gap:1px">
+        <sc-for list="{{ recentDocs }}" as="r" hint-placeholder-count="4"><div onClick="{{ r.onClick }}" style="{{ r.style }}"><span style="{{ r.badgeStyle }}">{{ r.badge }}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</span><span style="font:10.5px ui-monospace,Menlo,monospace;color:#bdb8af;flex:none">{{ r.ago }}</span></div></sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ----- SIDEBAR (collapsed rail) ----- -->
+    <sc-if value="{{ sidebarCollapsed }}" hint-placeholder-val="{{ false }}">
+    <div style="width:52px;background:#f7f5f1;border-right:1px solid rgba(0,0,0,.06);flex:none;display:flex;flex-direction:column;align-items:center;padding:12px 0;gap:4px">
+      <sc-for list="{{ railFilters }}" as="f" hint-placeholder-count="5">
+      <div onClick="{{ f.onClick }}" title="{{ f.label }}" style="{{ f.style }}"><span style="{{ f.markStyle }}">{{ f.markText }}</span></div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <!-- ----- MAIN ----- -->
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0;background:#fffefb;position:relative">
+
+      <!-- tab bar -->
+      <div class="sc" style="display:flex;align-items:stretch;height:40px;background:#f3f1ec;border-bottom:1px solid rgba(0,0,0,.07);flex:none;overflow-x:auto">
+        <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3">
+        <div onClick="{{ t.onClick }}" style="{{ t.style }}">
+          <span style="{{ t.badgeStyle }}">{{ t.badge }}</span>
+          <span style="font:12px/1 ui-monospace,Menlo,monospace">{{ t.file }}</span>
+          <span onClick="{{ t.onClose }}" style="margin-left:4px;color:#b5b0a6;font-size:13px;width:16px;height:16px;display:flex;align-items:center;justify-content:center;border-radius:4px" style-hover="background:rgba(0,0,0,.08);color:#26241f">×</span>
+        </div>
+        </sc-for>
+        <div onClick="{{ openPalette }}" title="Open file (⌘K)" style="display:flex;align-items:center;justify-content:center;width:34px;color:#a8a29a;font-size:16px;cursor:pointer;flex:none" style-hover="color:#26241f">＋</div>
+      </div>
+
+      <sc-if value="{{ hasActive }}" hint-placeholder-val="{{ true }}">
+      <!-- path row -->
+      <div style="display:flex;align-items:center;gap:10px;height:32px;flex:none;padding:0 18px;border-bottom:1px solid rgba(0,0,0,.05)">
+        <div style="display:flex;align-items:center;gap:4px;flex:none">
+          <sc-for list="{{ pathSegments }}" as="seg" hint-placeholder-count="2"><span style="{{ seg.sepStyle }}">/</span><span onClick="{{ seg.onClick }}" title="{{ seg.title }}" style="{{ seg.style }}" style-hover="{{ seg.hoverStyle }}">{{ seg.label }}</span></sc-for>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
+          <sc-for list="{{ activeTags }}" as="tg" hint-placeholder-count="2"><span onClick="{{ tg.onClick }}" style="font:500 10.5px -apple-system,system-ui;color:oklch(0.5 0.1 264);background:oklch(0.95 0.03 264);padding:2px 9px;border-radius:11px;cursor:pointer">#{{ tg.label }}</span></sc-for>
+          <sc-if value="{{ canHistory }}" hint-placeholder-val="{{ true }}"><span onClick="{{ openHistory }}" title="Version history" style="display:flex;align-items:center;gap:5px;font:500 11px -apple-system,system-ui;color:#8a8a8f;padding:3px 9px;border-radius:7px;cursor:pointer" style-hover="background:#f0eee9;color:#26241f">⟲ History</span></sc-if>
+          <div style="position:relative">
+            <span onClick="{{ toggleExport }}" title="Export" style="display:flex;align-items:center;gap:5px;font:500 11px -apple-system,system-ui;color:#8a8a8f;padding:3px 9px;border-radius:7px;cursor:pointer" style-hover="background:#f0eee9;color:#26241f">⤓ Export</span>
+            <sc-if value="{{ exportOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;top:28px;right:0;z-index:30;width:210px;background:#fffefb;border:1px solid rgba(0,0,0,.12);border-radius:10px;box-shadow:0 16px 44px -12px rgba(0,0,0,.3);overflow:hidden;animation:pop .1s ease;padding:5px">
+              <sc-for list="{{ exportItems }}" as="x" hint-placeholder-count="4"><div onClick="{{ x.onClick }}" style="display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:7px;cursor:pointer;font:13px -apple-system,system-ui;color:#26241f" style-hover="background:oklch(0.96 0.02 264)"><span style="width:16px;text-align:center;color:#a8a29a;font-size:13px">{{ x.icon }}</span>{{ x.label }}</div></sc-for>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+
+      <!-- editor / preview -->
+      <div style="flex:1;display:flex;min-height:0">
+        <!-- SOURCE / EDIT -->
+        <sc-if value="{{ showSource }}" hint-placeholder-val="{{ true }}">
+        <div class="sc" style="{{ sourcePaneStyle }}">
+          <sc-if value="{{ isEml }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:22px 24px;max-width:680px">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+                <div style="font:600 13px -apple-system,system-ui;color:#26241f">Email Template</div>
+                <div onClick="{{ aiGenerate }}" style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:oklch(0.95 0.03 264);color:oklch(0.45 0.12 264);font:500 12px -apple-system,system-ui;cursor:pointer" style-hover="background:oklch(0.92 0.045 264)">✨ Draft with AI</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <label style="display:flex;flex-direction:column;gap:5px"><span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.04em">SUBJECT</span><input value="{{ emlSubject }}" onInput="{{ onEmlSubject }}" style="border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:9px 11px;font:14px -apple-system,system-ui;color:#26241f;background:#fffefb;outline:none"></label>
+                <div style="display:flex;gap:12px">
+                  <label style="flex:1;display:flex;flex-direction:column;gap:5px"><span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.04em">FROM</span><input value="{{ emlFrom }}" onInput="{{ onEmlFrom }}" style="border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:9px 11px;font:13px ui-monospace,Menlo,monospace;color:#403d37;background:#fffefb;outline:none"></label>
+                  <label style="flex:1;display:flex;flex-direction:column;gap:5px"><span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.04em">TO</span><input value="{{ emlTo }}" onInput="{{ onEmlTo }}" style="border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:9px 11px;font:13px ui-monospace,Menlo,monospace;color:#403d37;background:#fffefb;outline:none"></label>
+                </div>
+                <label style="display:flex;flex-direction:column;gap:5px"><span style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.04em">BODY · HTML</span><textarea value="{{ emlBody }}" onInput="{{ onEmlBody }}" style="border:1px solid rgba(0,0,0,.12);border-radius:8px;padding:12px 13px;font:12.5px/1.7 ui-monospace,Menlo,monospace;color:#403d37;background:#fffefb;outline:none;resize:none;min-height:280px"></textarea></label>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ isTextSource }}" hint-placeholder-val="{{ true }}">
+            <textarea value="{{ sourceValue }}" onInput="{{ onSource }}" onKeyDown="{{ onSourceKey }}" ref="{{ sourceRef }}" spellcheck="false" style="width:100%;height:100%;border:none;outline:none;resize:none;padding:24px 28px;font:13.5px/1.85 ui-monospace,Menlo,monospace;color:#403d37;background:transparent"></textarea>
+          </sc-if>
+        </div>
+        </sc-if>
+        <!-- PREVIEW -->
+        <sc-if value="{{ showPreview }}" hint-placeholder-val="{{ true }}">
+        <div class="sc" style="{{ previewPaneStyle }}">{{ previewEl }}</div>
+        </sc-if>
+      </div>
+
+      <!-- status bar -->
+      <div style="display:flex;align-items:center;gap:18px;height:26px;flex:none;background:#faf9f7;border-top:1px solid rgba(0,0,0,.06);padding:0 18px;font:11px ui-monospace,Menlo,monospace;color:#a8a29a">
+        <span>{{ activeTypeLabel }}</span><span>UTF-8</span><span style="display:flex;align-items:center;gap:5px;color:#1a8a4f"><span style="width:6px;height:6px;border-radius:50%;background:#28b463"></span>Synced</span><span style="margin-left:auto">{{ backlinkCount }} backlinks</span><span>{{ wordCount }} words</span>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ noActive }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:#bdb8af">
+        <div style="font-size:34px">⌘</div>
+        <div style="font:400 14px -apple-system,system-ui">No note open</div>
+        <div onClick="{{ openPalette }}" style="font:500 12.5px -apple-system,system-ui;color:oklch(0.5 0.12 264);cursor:pointer">Press ⌘K to open a file</div>
+      </div>
+      </sc-if>
+
+      <!-- FIND & REPLACE -->
+      <sc-if value="{{ findOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;top:80px;right:18px;z-index:25;width:340px;background:#fffefb;border:1px solid rgba(0,0,0,.12);border-radius:11px;box-shadow:0 16px 44px -12px rgba(0,0,0,.32);padding:11px;animation:pop .12s ease">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <input value="{{ findQuery }}" onInput="{{ onFindInput }}" placeholder="Find" style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:7px 9px;font:12.5px ui-monospace,Menlo,monospace;color:#26241f;outline:none;background:#fffefb">
+          <span style="font:11px ui-monospace,Menlo,monospace;color:#a8a29a;min-width:46px;text-align:right">{{ findCount }}</span>
+          <span onClick="{{ closeFind }}" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:6px;color:#8a8a8f;cursor:pointer" style-hover="background:#f0eee9">×</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input value="{{ replaceQuery }}" onInput="{{ onReplaceInput }}" placeholder="Replace" style="flex:1;border:1px solid rgba(0,0,0,.12);border-radius:7px;padding:7px 9px;font:12.5px ui-monospace,Menlo,monospace;color:#26241f;outline:none;background:#fffefb">
+          <span onClick="{{ replaceAll }}" style="font:500 11.5px -apple-system,system-ui;color:oklch(0.45 0.12 264);background:oklch(0.95 0.03 264);padding:6px 10px;border-radius:7px;cursor:pointer">All</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+          <span onClick="{{ toggleRegex }}" style="{{ regexChip }}">.* regex</span>
+          <span onClick="{{ findNext }}" style="font:500 11.5px -apple-system,system-ui;color:#8a8a8f;cursor:pointer">Next ↵</span>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- AUTOCOMPLETE / SLASH -->
+      <sc-if value="{{ suggestOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;left:20px;bottom:40px;z-index:24;width:280px;background:#fffefb;border:1px solid rgba(0,0,0,.12);border-radius:11px;box-shadow:0 16px 44px -12px rgba(0,0,0,.3);overflow:hidden;animation:rise .1s ease">
+        <div style="padding:7px 12px;font:600 10px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;border-bottom:1px solid rgba(0,0,0,.06)">{{ suggestTitle }}</div>
+        <sc-for list="{{ suggestItems }}" as="s" hint-placeholder-count="4"><div onClick="{{ s.onClick }}" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;font:13px -apple-system,system-ui;color:#26241f" style-hover="background:oklch(0.96 0.02 264)"><span style="{{ s.iconStyle }}">{{ s.icon }}</span><span style="flex:1">{{ s.label }}</span><span style="font:10.5px ui-monospace,Menlo,monospace;color:#bdb8af">{{ s.hint }}</span></div></sc-for>
+      </div>
+      </sc-if>
+    </div>
+
+    <!-- ----- CONTEXT RAIL ----- -->
+    <sc-if value="{{ railVisible }}" hint-placeholder-val="{{ true }}">
+    <div class="sc" style="width:250px;background:#faf9f6;border-left:1px solid rgba(0,0,0,.06);overflow:auto;flex:none;padding:22px 18px">
+      <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;margin-bottom:12px">OUTLINE</div>
+      <sc-if value="{{ hasOutline }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:28px">
+        <sc-for list="{{ outline }}" as="o" hint-placeholder-count="4"><span onClick="{{ o.onClick }}" style="{{ o.style }}">{{ o.text }}</span></sc-for>
+      </div>
+      </sc-if>
+      <sc-if value="{{ noOutline }}" hint-placeholder-val="{{ false }}"><div style="font:400 12px -apple-system,system-ui;color:#c4c0b6;margin-bottom:28px">No headings</div></sc-if>
+
+      <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;margin-bottom:12px">BACKLINKS · {{ backlinkCount }}</div>
+      <sc-if value="{{ hasBacklinks }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <sc-for list="{{ backlinks }}" as="b" hint-placeholder-count="2">
+        <div onClick="{{ b.onClick }}" style="padding:10px 12px;background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:9px;cursor:pointer" style-hover="border-color:oklch(0.8 0.08 264)">
+          <div style="font-size:12px;font-weight:600;color:#26241f">{{ b.title }}</div>
+          <div style="font-size:11px;color:#a8a29a;margin-top:3px;line-height:1.45">{{ b.snippet }}</div>
+        </div>
+        </sc-for>
+      </div>
+      </sc-if>
+      <sc-if value="{{ noBacklinks }}" hint-placeholder-val="{{ false }}"><div style="font:400 12px -apple-system,system-ui;color:#c4c0b6">No backlinks yet</div></sc-if>
+
+      <sc-if value="{{ hasUnlinked }}" hint-placeholder-val="{{ false }}">
+      <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;margin:26px 0 12px">UNLINKED MENTIONS · {{ unlinkedCount }}</div>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <sc-for list="{{ unlinked }}" as="u" hint-placeholder-count="2"><div onClick="{{ u.onClick }}" style="padding:10px 12px;background:#fff;border:1px dashed rgba(0,0,0,.16);border-radius:9px;cursor:pointer" style-hover="border-color:oklch(0.78 0.09 264)"><div style="font-size:12px;font-weight:600;color:#26241f">{{ u.title }}</div><div style="font-size:11px;color:#a8a29a;margin-top:3px;line-height:1.45">{{ u.snippet }}</div></div></sc-for>
+      </div>
+      </sc-if>
+    </div>
+    </sc-if>
+  </div>
+
+  <!-- ================= COMMAND PALETTE ================= -->
+  <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closePalette }}" style="position:fixed;inset:0;background:rgba(30,28,24,.28);display:flex;align-items:flex-start;justify-content:center;padding-top:13vh;z-index:50;animation:fade .12s ease">
+    <div onClick="{{ stop }}" style="width:560px;max-width:92vw;background:#fffefb;border-radius:14px;box-shadow:0 30px 80px -16px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.08);overflow:hidden;animation:pop .14s ease">
+      <div style="display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid rgba(0,0,0,.07)">
+        <span style="color:#a8a29a;font-size:16px">⌕</span>
+        <input value="{{ paletteQuery }}" onInput="{{ onPaletteInput }}" onKeyDown="{{ onPaletteKey }}" ref="{{ paletteRef }}" placeholder="Search files, or type a command…" style="flex:1;border:none;outline:none;background:transparent;font:15px -apple-system,system-ui;color:#26241f">
+        <span style="font:600 10px ui-monospace,Menlo,monospace;color:#bdb8af;background:#f0eee9;padding:3px 7px;border-radius:5px">ESC</span>
+      </div>
+      <div class="sc" style="max-height:340px;overflow:auto;padding:7px">
+        <sc-for list="{{ paletteResults }}" as="r" hint-placeholder-count="6">
+        <div onClick="{{ r.onClick }}" style="{{ r.style }}">
+          <span style="{{ r.iconStyle }}">{{ r.icon }}</span>
+          <span style="flex:1;font:13.5px -apple-system,system-ui;color:#26241f">{{ r.title }}</span>
+          <span style="font:11px ui-monospace,Menlo,monospace;color:#bdb8af">{{ r.hint }}</span>
+        </div>
+        </sc-for>
+        <sc-if value="{{ paletteEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:22px;text-align:center;font:13px -apple-system,system-ui;color:#bdb8af">No matches</div></sc-if>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= HISTORY ================= -->
+  <sc-if value="{{ historyOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeHistory }}" style="position:fixed;inset:0;background:rgba(30,28,24,.28);display:flex;align-items:center;justify-content:center;z-index:50;animation:fade .12s ease">
+    <div onClick="{{ stop }}" style="width:760px;max-width:94vw;height:560px;max-height:88vh;background:#fffefb;border-radius:14px;box-shadow:0 30px 80px -16px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.08);overflow:hidden;animation:pop .14s ease;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.07)">
+        <div style="font:600 15px -apple-system,system-ui;color:#26241f">Version history · {{ historyFile }}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span onClick="{{ saveSnapshot }}" style="font:500 12px -apple-system,system-ui;color:#8a8a8f;padding:6px 11px;border-radius:8px;border:1px solid rgba(0,0,0,.12);cursor:pointer" style-hover="background:#f0eee9">Save snapshot</span>
+          <span onClick="{{ closeHistory }}" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:#8a8a8f;font-size:16px;cursor:pointer" style-hover="background:#f0eee9">×</span>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;min-height:0">
+        <div class="sc" style="width:230px;border-right:1px solid rgba(0,0,0,.07);overflow:auto;padding:9px;flex:none">
+          <sc-for list="{{ historyList }}" as="h" hint-placeholder-count="3"><div onClick="{{ h.onClick }}" style="{{ h.style }}"><div style="font:500 12.5px -apple-system,system-ui">{{ h.label }}</div><div style="font:11px ui-monospace,Menlo,monospace;color:#bdb8af;margin-top:2px">{{ h.ts }}</div></div></sc-for>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+          <div class="sc" style="flex:1;overflow:auto;padding:14px 16px;font:12.5px/1.65 ui-monospace,Menlo,monospace;background:#fdfcf9">
+            <sc-if value="{{ hasDiff }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ diffRows }}" as="d" hint-placeholder-count="6"><div style="{{ d.style }}">{{ d.text }}</div></sc-for></sc-if>
+            <sc-if value="{{ noDiff }}" hint-placeholder-val="{{ false }}"><div style="color:#bdb8af;padding:8px">This is the current version. Pick an older snapshot to compare.</div></sc-if>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;border-top:1px solid rgba(0,0,0,.07)">
+            <span style="font:11px -apple-system,system-ui;color:#a8a29a"><span style="color:#1a8a4f">+ added</span> · <span style="color:#c0392b">− removed</span> relative to current</span>
+            <span onClick="{{ restore }}" style="{{ restoreStyle }}">Restore this version</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= GRAPH ================= -->
+  <sc-if value="{{ graphOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeGraph }}" style="position:fixed;inset:0;background:rgba(30,28,24,.3);display:flex;align-items:center;justify-content:center;z-index:50;animation:fade .12s ease">
+    <div onClick="{{ stop }}" style="width:740px;max-width:94vw;height:520px;max-height:88vh;background:#fffefb;border-radius:14px;box-shadow:0 30px 80px -16px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.08);overflow:hidden;animation:pop .14s ease;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.07)"><div style="font:600 15px -apple-system,system-ui;color:#26241f">Graph view <span style="color:#bdb8af;font-weight:400">· notes linked by [[wiki-links]]</span></div><span onClick="{{ closeGraph }}" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:#8a8a8f;font-size:16px;cursor:pointer" style-hover="background:#f0eee9">×</span></div>
+      <div style="flex:1;min-height:0;background:#faf9f6">
+        <svg viewBox="0 0 720 420" style="width:100%;height:100%">
+          <sc-for list="{{ graphEdges }}" as="e" hint-placeholder-count="4"><line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" stroke="oklch(0.8 0.05 264)" stroke-width="1.5"></line></sc-for>
+          <sc-for list="{{ graphNodes }}" as="n" hint-placeholder-count="5"><circle cx="{{ n.x }}" cy="{{ n.y }}" r="{{ n.r }}" fill="{{ n.fill }}" stroke="{{ n.stroke }}" stroke-width="2" onClick="{{ n.onClick }}" style="cursor:pointer"></circle><text x="{{ n.x }}" y="{{ n.ty }}" text-anchor="middle" style="font:600 11px -apple-system,system-ui;fill:#403d37;pointer-events:none">{{ n.label }}</text></sc-for>
+        </svg>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= QUICK CAPTURE ================= -->
+  <sc-if value="{{ captureOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeCapture }}" style="position:fixed;inset:0;background:rgba(30,28,24,.28);display:flex;align-items:flex-start;justify-content:center;padding-top:16vh;z-index:51;animation:fade .12s ease">
+    <div onClick="{{ stop }}" style="width:520px;max-width:92vw;background:#fffefb;border-radius:14px;box-shadow:0 30px 80px -16px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.08);overflow:hidden;animation:pop .14s ease">
+      <div style="display:flex;align-items:center;gap:9px;padding:14px 18px;border-bottom:1px solid rgba(0,0,0,.07)"><span style="font-size:15px">✎</span><span style="font:600 13.5px -apple-system,system-ui;color:#26241f">Quick capture</span><span style="margin-left:auto;font:11px -apple-system,system-ui;color:#a8a29a">appends to today's daily note</span></div>
+      <textarea value="{{ captureText }}" onInput="{{ onCaptureInput }}" onKeyDown="{{ onCaptureKey }}" ref="{{ captureRef }}" placeholder="Jot a thought…" style="width:100%;border:none;outline:none;resize:none;padding:16px 18px;font:14px/1.6 -apple-system,system-ui;color:#26241f;min-height:120px;background:transparent"></textarea>
+      <div style="display:flex;align-items:center;justify-content:flex-end;gap:9px;padding:11px 16px;border-top:1px solid rgba(0,0,0,.07)"><span onClick="{{ closeCapture }}" style="font:500 12.5px -apple-system,system-ui;color:#8a8a8f;padding:7px 13px;border-radius:8px;cursor:pointer">Cancel</span><span onClick="{{ saveCapture }}" style="font:500 12.5px -apple-system,system-ui;color:#fff;background:oklch(0.5 0.12 264);padding:7px 15px;border-radius:8px;cursor:pointer">Save ⌘↵</span></div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= SHORTCUTS ================= -->
+  <sc-if value="{{ shortcutsOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeShortcuts }}" style="position:fixed;inset:0;background:rgba(30,28,24,.28);display:flex;align-items:center;justify-content:center;z-index:51;animation:fade .12s ease">
+    <div onClick="{{ stop }}" style="width:460px;max-width:92vw;background:#fffefb;border-radius:14px;box-shadow:0 30px 80px -16px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.08);overflow:hidden;animation:pop .14s ease">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(0,0,0,.07)"><div style="font:600 15px -apple-system,system-ui;color:#26241f">Keyboard shortcuts</div><span onClick="{{ closeShortcuts }}" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:#8a8a8f;font-size:16px;cursor:pointer" style-hover="background:#f0eee9">×</span></div>
+      <div style="padding:8px 20px 18px">
+        <sc-for list="{{ shortcuts }}" as="k" hint-placeholder-count="6"><div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.04)"><span style="font:13.5px -apple-system,system-ui;color:#403d37">{{ k.label }}</span><span style="font:600 11px ui-monospace,Menlo,monospace;color:#8a8a8f;background:#f0eee9;padding:3px 8px;border-radius:6px">{{ k.keys }}</span></div></sc-for>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ================= SETTINGS ================= -->
+  <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
+  <div onClick="{{ closeSettings }}" style="position:fixed;inset:0;background:rgba(30,28,24,.28);display:flex;align-items:center;justify-content:center;z-index:50;animation:fade .12s ease">
+    <div onClick="{{ stop }}" style="width:600px;max-width:92vw;background:#fffefb;border-radius:14px;box-shadow:0 30px 80px -16px rgba(0,0,0,.45);border:1px solid rgba(0,0,0,.08);overflow:hidden;animation:pop .14s ease">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid rgba(0,0,0,.07)">
+        <div style="font:600 16px -apple-system,system-ui;color:#26241f">Settings</div>
+        <div onClick="{{ closeSettings }}" style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:7px;color:#8a8a8f;font-size:16px;cursor:pointer" style-hover="background:#f0eee9">×</div>
+      </div>
+      <div class="sc" style="padding:8px 22px 22px;max-height:62vh;overflow:auto">
+        <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;padding:18px 0 10px">APPEARANCE</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0"><span style="font:14px -apple-system,system-ui;color:#403d37">Theme</span>
+          <div style="display:flex;background:#f0eee9;border-radius:8px;padding:2px;font:500 12px -apple-system,system-ui">
+            <span style="padding:5px 13px;border-radius:6px;background:#fffefb;color:#26241f;box-shadow:0 1px 2px rgba(0,0,0,.1)">Light</span><span style="padding:5px 13px;border-radius:6px;color:#8a8a8f">Dark</span><span style="padding:5px 13px;border-radius:6px;color:#8a8a8f">Auto</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(0,0,0,.05)"><span style="font:14px -apple-system,system-ui;color:#403d37">Accent color</span>
+          <div style="display:flex;gap:8px">
+            <span style="width:22px;height:22px;border-radius:50%;background:oklch(0.55 0.13 264);outline:2px solid oklch(0.7 0.1 264);outline-offset:2px"></span>
+            <span style="width:22px;height:22px;border-radius:50%;background:oklch(0.6 0.12 150)"></span>
+            <span style="width:22px;height:22px;border-radius:50%;background:oklch(0.62 0.13 30)"></span>
+            <span style="width:22px;height:22px;border-radius:50%;background:#8a8a8f"></span>
+          </div>
+        </div>
+        <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;padding:20px 0 10px">EDITOR</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0"><span style="font:14px -apple-system,system-ui;color:#403d37">Default view</span>
+          <div style="display:flex;background:#f0eee9;border-radius:8px;padding:2px;font:500 12px ui-monospace,Menlo,monospace">
+            <sc-for list="{{ settingsViewBtns }}" as="b" hint-placeholder-count="3"><span onClick="{{ b.onClick }}" style="{{ b.style }}">{{ b.label }}</span></sc-for>
+          </div>
+        </div>
+        <div onClick="{{ toggleWiki }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(0,0,0,.05);cursor:pointer"><span style="font:14px -apple-system,system-ui;color:#403d37">Render <span style="color:oklch(0.5 0.12 264)">[[wiki-links]]</span> in preview</span><div style="{{ wikiToggleTrack }}"><div style="{{ wikiToggleKnob }}"></div></div></div>
+        <div onClick="{{ toggleAutosave }}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid rgba(0,0,0,.05);cursor:pointer"><span style="font:14px -apple-system,system-ui;color:#403d37">Autosave on edit</span><div style="{{ autosaveToggleTrack }}"><div style="{{ autosaveToggleKnob }}"></div></div></div>
+        <div style="font:600 10.5px ui-monospace,Menlo,monospace;color:#b5b0a6;letter-spacing:.05em;padding:20px 0 10px">FILES</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0"><span style="font:14px -apple-system,system-ui;color:#403d37">New note format</span><span style="font:13px ui-monospace,Menlo,monospace;color:#8a8a8f;background:#f0eee9;padding:6px 12px;border-radius:8px">Markdown · .md ▾</span></div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1320,&quot;height&quot;:820},&quot;showRightSidebar&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+class Component extends DCLogic {
+  state = {
+    collapsed: false, paletteOpen: false, settingsOpen: false,
+    findOpen: false, findQuery: '', replaceQuery: '', findRegex: false,
+    historyOpen: false, historyPick: 0,
+    graphOpen: false, captureOpen: false, captureText: '', shortcutsOpen: false,
+    exportOpen: false, htmlWidth: 'desktop', paletteIdx: 0,
+    suggest: null,
+    view: 'split', activeId: 'api', paletteQuery: '', railHidden: false, editedAt: {}, expandedDocs: { api: true, roadmap: true },
+    openTabs: ['api', 'landing', 'q2'], filter: 'all',
+    wiki: true, autosave: true,
+    dynamicFiles: [],
+    sources: {
+      api: [
+        '---', 'tags: [api, guidelines, platform]', 'status: living', '---',
+        '# API Design Guidelines', '',
+        '## Versioning',
+        'All public endpoints are versioned via the URL path. Breaking changes require a new major version — see [[Deprecation Policy]] before removing fields.', '',
+        '```http', 'GET /api/v2/users/:id', 'Accept: application/json', '```', '',
+        '## Conventions',
+        '- Use plural, lowercase resource names (`/invoices`)',
+        '- Return ISO-8601 timestamps in UTC',
+        '- Paginate with `cursor`, never offset', '',
+        '## Error Format',
+        'Errors return a consistent envelope with `code`, `message`, and an optional `details` array. See [[Error Catalog]] for the full list.'
+      ].join('\n'),
+      runbook: [
+        '---', 'tags: [ops, deploy]', '---',
+        '# Deployment Runbook', '',
+        'Step-by-step rollout for the staging → prod promotion pipeline. Follows the [[API Design Guidelines]] for versioned releases.', '',
+        '## Pre-flight',
+        '- [x] Confirm green CI on `main`',
+        '- [x] Tag the release `vX.Y.Z`',
+        '- [ ] Notify #releases channel', '',
+        '## Promote',
+        '1. Deploy to staging',
+        '2. Run smoke suite',
+        '3. Canary 10% then 100%'
+      ].join('\n'),
+      adr: [
+        '---', 'tags: [architecture, decision]', '---',
+        '# ADR-014 · Event Bus', '',
+        '**Status:** Accepted', '',
+        '## Decision',
+        'Adopt an internal event bus over point-to-point calls. Per the [[API Design Guidelines]], v2 endpoints publish domain events asynchronously.', '',
+        '## Flow',
+        '```mermaid',
+        'graph LR',
+        '  P[Producer] --> B((Event Bus))',
+        '  B --> C1[Consumer A]',
+        '  B --> C2[Consumer B]',
+        '```',
+        'At steady state, throughput per partition follows $T = \\lambda / \\mu$.', '',
+        '## Consequences',
+        '- Looser coupling between services',
+        '- Requires an idempotency strategy'
+      ].join('\n'),
+      landing: [
+        '<!doctype html>',
+        '<html><head><meta charset="utf-8"><title>Acme Cloud</title></head>',
+        '<body style="margin:0;font-family:-apple-system,system-ui,sans-serif;color:#1d1d1f">',
+        '  <header style="padding:64px 40px;text-align:center;background:#faf8f3">',
+        '    <h1 style="font-size:40px;margin:0 0 12px;letter-spacing:-.02em">Ship faster on Acme Cloud</h1>',
+        '    <p style="font-size:18px;color:#6e6e73;margin:0 0 26px">Deploy in seconds. Scale without thinking.</p>',
+        '    <a href="#" style="display:inline-block;padding:13px 30px;background:#26241f;color:#fff;border-radius:9px;text-decoration:none;font-weight:600">Get started</a>',
+        '  </header>',
+        '  <section style="padding:54px 40px;display:flex;gap:28px;max-width:900px;margin:0 auto">',
+        '    <div style="flex:1"><h3 style="margin:0 0 6px">Fast</h3><p style="color:#6e6e73;margin:0">Edge deploys worldwide.</p></div>',
+        '    <div style="flex:1"><h3 style="margin:0 0 6px">Simple</h3><p style="color:#6e6e73;margin:0">One command to ship.</p></div>',
+        '    <div style="flex:1"><h3 style="margin:0 0 6px">Secure</h3><p style="color:#6e6e73;margin:0">SOC 2 by default.</p></div>',
+        '  </section>',
+        '</body></html>'
+      ].join('\n'),
+      signature: [
+        '<!doctype html>',
+        '<html><body style="margin:0;font-family:-apple-system,system-ui,sans-serif">',
+        '  <table style="font-size:13px;color:#1d1d1f"><tr>',
+        '    <td style="padding-right:14px;border-right:2px solid #c9b89a">',
+        '      <div style="font-weight:700;font-size:15px">Jordan Lee</div>',
+        '      <div style="color:#6e6e73">Staff Engineer · Acme</div>',
+        '    </td>',
+        '    <td style="padding-left:14px;color:#6e6e73;font-size:12px">jordan@acme.dev<br>acme.dev</td>',
+        '  </tr></table>',
+        '</body></html>'
+      ].join('\n'),
+      security: [
+        '---', 'tags: [security, checklist, platform]', 'status: living', '---',
+        '# Security Checklist', '',
+        'Run before every production release. Pairs with the [[Deployment Runbook]].', '',
+        '## Authentication',
+        '- [x] All endpoints require a scoped token',
+        '- [x] Tokens expire after 24h',
+        '- [ ] Rotate signing keys quarterly', '',
+        '## Data',
+        '- [x] PII encrypted at rest (AES-256)',
+        '- [ ] Audit log retention set to 90 days', '',
+        '## Dependencies',
+        '- [ ] `npm audit` clean on `main`',
+        '- [ ] No critical CVEs in base images'
+      ].join('\n'),
+      oncall: [
+        '---', 'tags: [ops, oncall]', '---',
+        '# On-call Playbook', '',
+        'First responder guide for the platform rotation. Escalate to the [[Deployment Runbook]] owner for rollbacks.', '',
+        '## Severity Levels',
+        '- **SEV1** — respond in 5 min · page on-call',
+        '- **SEV2** — respond in 30 min · page on-call',
+        '- **SEV3** — next business day · no page', '',
+        '## First 10 Minutes',
+        '1. Acknowledge the alert',
+        '2. Open the incident channel',
+        '3. Check the [[API Design Guidelines]] status dashboard',
+        '4. Decide: mitigate or roll back'
+      ].join('\n'),
+      roadmap: [
+        '---', 'tags: [product, roadmap]', 'status: draft', '---',
+        '# Roadmap · Q3', '',
+        '> North star: make multi-region the default.', '',
+        '## Now',
+        '- Multi-region failover (depends on [[ADR-014 Event Bus]])',
+        '- Deprecate v1 endpoints', '',
+        '## Next',
+        '- Self-serve usage dashboards',
+        '- Regional data residency controls', '',
+        '## Later',
+        '- Edge function runtime',
+        '- Bring-your-own-key encryption'
+      ].join('\n'),
+      postmortem: [
+        '---', 'tags: [incident, postmortem]', '---',
+        '# Incident #284 · Postmortem', '',
+        '**Status:** Resolved · **Duration:** 41 min · **Impact:** elevated 5xx on the API gateway', '',
+        '## Timeline',
+        '- `14:02` — error rate alert fires',
+        '- `14:09` — bad config identified',
+        '- `14:31` — rollback complete',
+        '- `14:43` — metrics nominal', '',
+        '## Root Cause',
+        'A malformed rate-limit rule shipped without passing the [[Security Checklist]] gate.', '',
+        '## Action Items',
+        '- [ ] Add config schema validation to CI',
+        '- [ ] Require checklist sign-off on gateway changes'
+      ].join('\n'),
+      pricing: [
+        '<!doctype html>',
+        '<html><head><meta charset="utf-8"><title>Pricing</title></head>',
+        '<body style="margin:0;font-family:-apple-system,system-ui,sans-serif;color:#1d1d1f;background:#fff">',
+        '  <section style="padding:56px 40px;text-align:center">',
+        '    <h1 style="font-size:34px;margin:0 0 8px;letter-spacing:-.02em">Simple, usage-based pricing</h1>',
+        '    <p style="font-size:16px;color:#6e6e73;margin:0">Only pay for what you deploy.</p>',
+        '  </section>',
+        '  <section style="display:flex;gap:20px;max-width:880px;margin:0 auto 60px;padding:0 40px">',
+        '    <div style="flex:1;border:1px solid #e7e3da;border-radius:14px;padding:28px"><div style="font-weight:700;font-size:15px">Hobby</div><div style="font-size:32px;font-weight:700;margin:10px 0">$0</div><p style="color:#6e6e73;font-size:13px;margin:0">1 project · community support</p></div>',
+        '    <div style="flex:1;border:2px solid #26241f;border-radius:14px;padding:28px"><div style="font-weight:700;font-size:15px">Pro</div><div style="font-size:32px;font-weight:700;margin:10px 0">$20<span style="font-size:14px;color:#6e6e73">/mo</span></div><p style="color:#6e6e73;font-size:13px;margin:0">Unlimited projects · SLAs</p></div>',
+        '    <div style="flex:1;border:1px solid #e7e3da;border-radius:14px;padding:28px"><div style="font-weight:700;font-size:15px">Enterprise</div><div style="font-size:32px;font-weight:700;margin:10px 0">Custom</div><p style="color:#6e6e73;font-size:13px;margin:0">SSO · dedicated support</p></div>',
+        '  </section>',
+        '</body></html>'
+      ].join('\n'),
+      errors: [
+        '---', 'tags: [api, reference]', '---',
+        '# Error Catalog', '',
+        'Canonical list of error codes returned by the v2 API. Part of the [[API Design Guidelines]].', '',
+        '## Client Errors',
+        '- `invalid_request` — malformed or missing parameters',
+        '- `unauthorized` — missing or expired token',
+        '- `forbidden` — token lacks the required scope',
+        '- `not_found` — resource does not exist',
+        '- `rate_limited` — too many requests; see `Retry-After`', '',
+        '## Server Errors',
+        '- `internal_error` — unexpected failure, safe to retry',
+        '- `unavailable` — dependency down; retry with backoff'
+      ].join('\n'),
+      milestones: [
+        '---', 'tags: [product, roadmap]', '---',
+        '# Q3 Milestones', '',
+        'Delivery checkpoints for the [[Roadmap Q3]] initiatives.', '',
+        '## July',
+        '- [x] Multi-region design sign-off',
+        '- [ ] Failover prototype in staging', '',
+        '## August',
+        '- [ ] v1 deprecation notice published',
+        '- [ ] Usage dashboard beta', '',
+        '## September',
+        '- [ ] Data residency controls GA',
+        '- [ ] Multi-region default for new projects'
+      ].join('\n')
+    },
+    history: {
+      api: [
+        { ts: 'Jun 28, 09:14', text: ['---', 'tags: [api, guidelines]', 'status: draft', '---', '# API Design Guidelines', '', '## Versioning', 'All public endpoints are versioned via the URL path. Breaking changes require a new major version.', '', '```http', 'GET /api/v2/users/:id', '```', '', '## Conventions', '- Use plural, lowercase resource names (`/invoices`)', '- Return ISO-8601 timestamps in UTC', '', '## Error Format', 'Errors return a consistent envelope with `code`, `message`, and an optional `details` object.'].join('\n') },
+        { ts: 'Jun 27, 16:02', text: ['# API Design Guidelines', '', '## Versioning', 'Endpoints are versioned via the URL path.', '', '## Conventions', '- Use plural resource names', '- Timestamps in UTC'].join('\n') }
+      ]
+    },
+    eml: {
+      q2: { from: 'platform@acme.dev', to: 'engineering-all@acme.dev', subject: 'Q2 Engineering Status Report', body: ['<h2 style="font:600 20px -apple-system,system-ui;color:#26241f;margin:0 0 14px">Q2 Engineering Status</h2>', '<p style="font:400 14px/1.7 -apple-system,system-ui;color:#403d37;margin:0 0 14px">Team — here is the automated Q2 summary, generated from this quarter\u2019s shipping data.</p>', '<h3 style="font:600 15px -apple-system,system-ui;color:#26241f;margin:0 0 8px">Highlights</h3>', '<ul style="font:400 14px/1.7 -apple-system,system-ui;color:#403d37;margin:0 0 16px;padding-left:20px"><li>Shipped the v2 public API</li><li>Cut p95 latency by 38%</li><li>Migrated 12 services to the event bus</li></ul>', '<h3 style="font:600 15px -apple-system,system-ui;color:#26241f;margin:0 0 8px">Next Quarter</h3>', '<p style="font:400 14px/1.7 -apple-system,system-ui;color:#403d37;margin:0 0 18px">Focus on multi-region failover and the deprecation of v1 endpoints.</p>', '<p style="font:400 14px -apple-system,system-ui;color:#8a8a8f;margin:0">— The Platform Team</p>'].join('\n') },
+      digest: { from: 'digest@acme.dev', to: 'team@acme.dev', subject: 'Weekly Engineering Digest', body: ['<h2 style="font:600 20px -apple-system,system-ui;color:#26241f;margin:0 0 14px">This Week in Engineering</h2>', '<ul style="font:400 14px/1.7 -apple-system,system-ui;color:#403d37;margin:0;padding-left:20px"><li>3 PRs merged to the API gateway</li><li>Incident #284 resolved</li><li>New onboarding doc published</li></ul>'].join('\n') },
+      welcome: { from: 'hello@acme.dev', to: '{{customer.email}}', subject: 'Welcome to Acme Cloud', body: ['<h2 style="font:600 20px -apple-system,system-ui;color:#26241f;margin:0 0 14px">You\u2019re in 🎉</h2>', '<p style="font:400 14px/1.7 -apple-system,system-ui;color:#403d37;margin:0 0 14px">Thanks for signing up. Your first deploy is one command away.</p>', '<pre style="font:13px ui-monospace,Menlo,monospace;background:#faf8f3;border:1px solid #eee;border-radius:8px;padding:12px 14px;margin:0 0 16px">npx acme deploy</pre>', '<p style="font:400 14px/1.7 -apple-system,system-ui;color:#403d37;margin:0">Questions? Just reply to this email.</p>'].join('\n') }
+    }
+  };
+
+  files = [
+    { id: 'api', title: 'API Design Guidelines', file: 'api-design.md', type: 'md', folder: 'Engineering', pinned: true },
+    { id: 'errors', title: 'Error Catalog', file: 'error-catalog.md', type: 'md', folder: 'Engineering', parent: 'api', pinned: false },
+    { id: 'runbook', title: 'Deployment Runbook', file: 'deployment.md', type: 'md', folder: 'Engineering', pinned: false },
+    { id: 'security', title: 'Security Checklist', file: 'security.md', type: 'md', folder: 'Engineering', pinned: false },
+    { id: 'oncall', title: 'On-call Playbook', file: 'oncall.md', type: 'md', folder: 'Engineering', pinned: false },
+    { id: 'adr', title: 'ADR-014 Event Bus', file: 'adr-014.md', type: 'md', folder: 'Engineering', pinned: false },
+    { id: 'roadmap', title: 'Roadmap Q3', file: 'roadmap.md', type: 'md', folder: 'Product', pinned: true },
+    { id: 'milestones', title: 'Q3 Milestones', file: 'q3-milestones.md', type: 'md', folder: 'Product', parent: 'roadmap', pinned: false },
+    { id: 'landing', title: 'Landing Page', file: 'landing-page.html', type: 'html', folder: 'Web', pinned: true },
+    { id: 'pricing', title: 'Pricing Page', file: 'pricing.html', type: 'html', folder: 'Web', pinned: false },
+    { id: 'signature', title: 'Email Signature', file: 'signature.html', type: 'html', folder: 'Web', pinned: false },
+    { id: 'q2', title: 'Q2 Status Report', file: 'q2-status.eml', type: 'eml', folder: 'Reports', pinned: true },
+    { id: 'postmortem', title: 'Incident #284 Postmortem', file: 'postmortem-284.md', type: 'md', folder: 'Reports', pinned: false },
+    { id: 'digest', title: 'Weekly Digest', file: 'weekly-digest.eml', type: 'eml', folder: 'Reports', pinned: false },
+    { id: 'welcome', title: 'Welcome Email', file: 'welcome.eml', type: 'eml', folder: 'Reports', pinned: false }
+  ];
+  backlinkMap = {
+    api: [
+      { id: 'runbook', title: 'Deployment Runbook', snippet: '…follows the API Design Guidelines for versioned releases…' },
+      { id: 'adr', title: 'ADR-014 Event Bus', snippet: '…per the API Design Guidelines, v2 endpoints publish…' }
+    ]
+  };
+  badgeColors = { md: { c: '#6c7686', b: 'rgba(108,118,134,.14)' }, html: { c: '#b5651d', b: 'rgba(181,101,29,.14)' }, eml: { c: '#3a6ea5', b: 'rgba(58,110,165,.14)' } };
+  typeLabels = { md: 'Markdown', html: 'HTML', eml: 'Outlook Template' };
+  slashDefs = [
+    { label: 'Heading', hint: '##', ins: '## ' },
+    { label: 'Bullet list', hint: '-', ins: '- ' },
+    { label: 'Numbered list', hint: '1.', ins: '1. ' },
+    { label: 'Task', hint: '[ ]', ins: '- [ ] ' },
+    { label: 'Code block', hint: '```', ins: '```\n\n```' },
+    { label: 'Quote', hint: '>', ins: '> ' },
+    { label: 'Table', hint: '⊞', ins: '| Column A | Column B |\n| --- | --- |\n|  |  |' }
+  ];
+
+  componentDidMount() {
+    this._key = (e) => {
+      const meta = e.metaKey || e.ctrlKey;
+      const k = e.key.toLowerCase();
+      if (meta && k === 'k') { e.preventDefault(); this.setState(s => ({ paletteOpen: !s.paletteOpen, paletteQuery: '', paletteIdx: 0 })); }
+      else if (meta && k === 'f' && this.state.activeId) { e.preventDefault(); this.setState(s => ({ findOpen: !s.findOpen })); }
+      else if (meta && k === 'g') { e.preventDefault(); this.setState(s => ({ graphOpen: !s.graphOpen })); }
+      else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); this.openCapture(); }
+      else if (meta && k === 'e' && this.state.activeId) { e.preventDefault(); this.setState(s => ({ view: s.view === 'preview' ? 'edit' : 'preview' })); }
+      else if (meta && e.key === '/') { e.preventDefault(); this.setState(s => ({ shortcutsOpen: !s.shortcutsOpen })); }
+      else if (meta && k === 'w' && this.state.activeId) { e.preventDefault(); this.closeTab(this.state.activeId); }
+      else if (meta && /^[1-9]$/.test(e.key)) { const i = +e.key - 1; if (this.state.openTabs[i]) { e.preventDefault(); this.setState({ activeId: this.state.openTabs[i] }); } }
+      else if (meta && e.shiftKey && e.key === '|') { e.preventDefault(); this.setState(s => ({ railHidden: !s.railHidden })); }
+      else if (meta && e.key === '\\') { e.preventDefault(); this.setState(s => ({ collapsed: !s.collapsed })); }
+      else if (e.key === 'Escape') { this.setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, graphOpen: false, captureOpen: false, shortcutsOpen: false, exportOpen: false, suggest: null }); }
+    };
+    document.addEventListener('keydown', this._key);
+    const now = Date.now(), MIN = 60000, HR = 3600000, DAY = 86400000;
+    this.setState({ editedAt: { api: now - 7 * MIN, postmortem: now - 22 * MIN, q2: now - 38 * MIN, security: now - 95 * MIN, roadmap: now - 2 * HR, runbook: now - 3 * HR, pricing: now - 8 * HR, oncall: now - 19 * HR, landing: now - 26 * HR, adr: now - 2 * DAY, welcome: now - 3 * DAY, digest: now - 4 * DAY } });
+    setTimeout(() => this.renderRich(), 400);
+    setTimeout(() => this.renderRich(), 1600);
+  }
+  componentDidUpdate(_, prev) {
+    if (this.state.paletteOpen && !prev.paletteOpen && this._pInput) setTimeout(() => { try { this._pInput.focus(); } catch (e) {} }, 20);
+    if (this.state.captureOpen && !prev.captureOpen && this._capInput) setTimeout(() => { try { this._capInput.focus(); } catch (e) {} }, 20);
+    this.renderRich();
+  }
+  renderRich() {
+    const root = this._preview; if (!root) return;
+    if (window.katex) root.querySelectorAll('[data-tex]:not([data-done])').forEach(el => { el.setAttribute('data-done', '1'); try { window.katex.render(el.getAttribute('data-tex'), el, { throwOnError: false }); } catch (e) {} });
+    if (window.mermaid) {
+      if (!this._mmdInit) { try { window.mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'neutral' }); } catch (e) {} this._mmdInit = true; }
+      root.querySelectorAll('.mmd:not([data-done])').forEach((el, i) => { el.setAttribute('data-done', '1'); const code = this._mmd && this._mmd[el.getAttribute('data-mmd')]; if (!code) return; const id = 'mmd' + Date.now() + i; try { window.mermaid.render(id, code).then(r => { el.innerHTML = r.svg; }).catch(() => { el.setAttribute('data-done', ''); }); } catch (e) {} });
+    }
+  }
+  componentWillUnmount() { document.removeEventListener('keydown', this._key); }
+
+  allFiles() { return this.files.concat(this.state.dynamicFiles); }
+  fileOf(id) { return this.allFiles().find(f => f.id === id); }
+  slug(t) { return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  now() { const M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']; const d = new Date(); return M[d.getMonth()] + ' ' + d.getDate() + ', ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+
+  parseFront(md) {
+    if (md.slice(0, 4) !== '---\n') return { body: md, tags: [], offset: 0 };
+    const end = md.indexOf('\n---', 4);
+    if (end === -1) return { body: md, tags: [], offset: 0 };
+    const block = md.slice(4, end);
+    const after = md.slice(end + 4).replace(/^\n/, '');
+    let tags = [];
+    block.split('\n').forEach(l => {
+      const m = /^tags:\s*(.+)$/.exec(l.trim());
+      if (m) tags = m[1].replace(/[\[\]]/g, '').split(',').map(s => s.trim()).filter(Boolean);
+    });
+    const offset = md.slice(0, md.length - after.length).split('\n').length - 1;
+    return { body: after, tags, offset };
+  }
+  fileTags(id) { const f = this.fileOf(id); if (!f || f.type !== 'md') return []; return this.parseFront(this.state.sources[id] || '').tags; }
+
+  inline(s) {
+    s = this.esc(s);
+    s = s.replace(/\$([^$\n]+)\$/g, (m, tex) => '<span data-tex="' + tex.replace(/"/g, '&quot;') + '">' + tex + '</span>');
+    s = s.replace(/`([^`]+)`/g, '<code style="font:13px ui-monospace,Menlo,monospace;background:#f0ede6;padding:1px 6px;border-radius:4px;color:#403d37">$1</code>');
+    if (this.state.wiki) s = s.replace(/\[\[([^\]]+)\]\]/g, '<span data-wiki="$1" style="color:oklch(0.5 0.12 264);border-bottom:1.5px solid oklch(0.82 0.08 264);font-weight:500;cursor:pointer">$1</span>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700;color:#26241f">$1</strong>');
+    return s;
+  }
+  highlight(code) {
+    const re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(const|let|var|function|return|if|else|for|while|import|from|export|class|new|await|async|GET|POST|PUT|DELETE|PATCH|true|false|null)\b|\b(\d+(?:\.\d+)?)\b/g;
+    return this.esc(code).replace(re, (m, com, str, kw, num) => com ? '<span style="color:#a8a29a">' + com + '</span>' : str ? '<span style="color:#1a8a4f">' + str + '</span>' : kw ? '<span style="color:oklch(0.5 0.16 295);font-weight:600">' + kw + '</span>' : num ? '<span style="color:#b5651d">' + num + '</span>' : m);
+  }
+
+  mdToHtml(md, off) {
+    this._codeBlocks = this._codeBlocks || {}; this._cbN = (this._cbN || 0);
+    const lines = md.split('\n');
+    let html = '', inCode = false, code = [], lang = '', inList = false;
+    const close = () => { if (inList) { html += '</ul>'; inList = false; } };
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.trim().startsWith('```')) {
+        if (inCode) {
+          if (lang === 'mermaid') {
+            this._mmd = this._mmd || {}; this._mmdN = (this._mmdN || 0);
+            const mid = 'mmd' + (this._mmdN++); this._mmd[mid] = code.join('\n');
+            html += '<div class="mmd" data-mmd="' + mid + '" style="border:1px solid rgba(0,0,0,.07);border-radius:9px;padding:18px;margin:0 0 18px;background:#faf8f3;overflow:auto;text-align:center;color:#a8a29a;font:12px ui-monospace,Menlo,monospace">◇ rendering diagram…</div>';
+          } else {
+            const id = 'cb' + (this._cbN++); this._codeBlocks[id] = code.join('\n');
+            html += '<div style="border:1px solid rgba(0,0,0,.07);border-radius:9px;overflow:hidden;margin:0 0 18px;background:#faf8f3"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid rgba(0,0,0,.06);font:11px ui-monospace,Menlo,monospace;color:#a8a29a"><span>' + (lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:oklch(0.5 0.1 264)">Copy</span></div><pre style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:#26241f;overflow:auto">' + this.highlight(code.join('\n')) + '</pre></div>';
+          }
+          code = []; inCode = false; lang = '';
+        } else { close(); inCode = true; lang = line.trim().slice(3); }
+        continue;
+      }
+      if (inCode) { code.push(line); continue; }
+      if (/^-\s\[( |x)\]\s/i.test(line)) {
+        close(); const done = /\[x\]/i.test(line); const text = line.replace(/^-\s\[( |x)\]\s/i, '');
+        html += '<div data-task="' + (i + off) + '" style="display:flex;align-items:flex-start;gap:9px;font:400 15.5px/1.6 -apple-system,system-ui;margin:0 0 5px;cursor:pointer"><span style="width:17px;height:17px;margin-top:3px;border-radius:5px;border:1.5px solid ' + (done ? 'oklch(0.5 0.12 264)' : '#cfc9bd') + ';background:' + (done ? 'oklch(0.5 0.12 264)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;flex:none">' + (done ? '✓' : '') + '</span><span style="' + (done ? 'color:#a8a29a;text-decoration:line-through' : 'color:#403d37') + '">' + this.inline(text) + '</span></div>';
+      }
+      else if (line.startsWith('### ')) { close(); const t = line.slice(4); html += '<h3 id="' + this.slug(t) + '" style="font:600 16px -apple-system,system-ui;color:#26241f;margin:22px 0 8px">' + this.inline(t) + '</h3>'; }
+      else if (line.startsWith('## ')) { close(); const t = line.slice(3); html += '<h2 id="' + this.slug(t) + '" style="font:600 20px -apple-system,system-ui;color:#26241f;margin:28px 0 12px">' + this.inline(t) + '</h2>'; }
+      else if (line.startsWith('# ')) { close(); const t = line.slice(2); html += '<h1 id="' + this.slug(t) + '" style="font:700 30px/1.2 -apple-system,system-ui;color:#26241f;margin:0 0 14px;letter-spacing:-.012em">' + this.inline(t) + '</h1>'; }
+      else if (/^>\s/.test(line)) { close(); html += '<blockquote style="border-left:3px solid oklch(0.8 0.07 264);padding:2px 0 2px 14px;margin:0 0 16px;color:#6a675f;font:400 15.5px/1.7 -apple-system,system-ui">' + this.inline(line.slice(2)) + '</blockquote>'; }
+      else if (/^\d+\.\s/.test(line)) { close(); html += '<div style="font:400 15.5px/1.75 -apple-system,system-ui;color:#403d37;margin:0 0 6px">' + this.inline(line) + '</div>'; }
+      else if (/^[-*]\s/.test(line)) { if (!inList) { html += '<ul style="font:400 15.5px/1.85 -apple-system,system-ui;color:#403d37;margin:0 0 16px;padding-left:22px">'; inList = true; } html += '<li style="margin-bottom:4px">' + this.inline(line.slice(2)) + '</li>'; }
+      else if (line.trim() === '') { close(); }
+      else { close(); html += '<p style="font:400 15.5px/1.75 -apple-system,system-ui;color:#403d37;margin:0 0 16px">' + this.inline(line) + '</p>'; }
+    }
+    close();
+    return html;
+  }
+
+  outlineMd(md) { const out = []; md.split('\n').forEach(l => { const m = /^(#{1,3})\s+(.+)/.exec(l); if (m) out.push({ level: m[1].length, text: m[2].replace(/\*\*/g, ''), id: this.slug(m[2]) }); }); return out; }
+  outlineHtml(h) { const out = []; const re = /<h([1-3])[^>]*>(.*?)<\/h\1>/gi; let m; while ((m = re.exec(h))) out.push({ level: +m[1], text: m[2].replace(/<[^>]+>/g, ''), id: '' }); return out; }
+  wordCount(s) { return s.replace(/<[^>]+>/g, ' ').replace(/[#>*`\-]/g, ' ').trim().split(/\s+/).filter(Boolean).length; }
+  scrollTo(id) { const c = this._preview; if (c && id) { const el = c.querySelector('#' + id); if (el) c.scrollTop = el.offsetTop - 18; } }
+
+  diffLines(a, b) {
+    const n = a.length, m = b.length, dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+    const out = []; let i = 0, j = 0;
+    while (i < n && j < m) { if (a[i] === b[j]) { out.push({ t: 'same', v: a[i] }); i++; j++; } else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push({ t: 'del', v: a[i] }); i++; } else { out.push({ t: 'add', v: b[j] }); j++; } }
+    while (i < n) out.push({ t: 'del', v: a[i++] });
+    while (j < m) out.push({ t: 'add', v: b[j++] });
+    return out;
+  }
+
+  open = (id) => this.setState(s => ({ activeId: id, openTabs: s.openTabs.includes(id) ? s.openTabs : [...s.openTabs, id] }));
+  closeTab = (id, e) => { if (e) e.stopPropagation(); this.setState(s => { const tabs = s.openTabs.filter(t => t !== id); let act = s.activeId; if (act === id) act = tabs[tabs.length - 1] || null; return { openTabs: tabs, activeId: act }; }); };
+  touch(id) { this.setState(s => ({ editedAt: { ...s.editedAt, [id]: Date.now() } })); }
+  agoLabel(ts) { if (!ts) return ''; const d = Date.now() - ts; const m = Math.round(d / 60000); if (m < 1) return 'now'; if (m < 60) return m + 'm'; const h = Math.round(m / 60); if (h < 24) return h + 'h'; const dd = Math.round(h / 24); if (dd < 7) return dd + 'd'; return Math.round(dd / 7) + 'w'; }
+  setEml(id, key, val) { this.setState(s => { const e = { ...s.eml }; e[id] = { ...e[id], [key]: val }; return { eml: e }; }); this.touch(id); }
+  aiGenerate = () => { const id = this.state.activeId; this.setState(s => { const e = { ...s.eml }; e[id] = { ...e[id], body: e[id].body + '\n<p style="font:400 14px/1.7 -apple-system,system-ui;color:#403d37;margin:14px 0 0"><em>Generated insight: deploy frequency rose 22% week-over-week.</em></p>' }; return { eml: e }; }); };
+  setSource(id, v) { this.setState(s => ({ sources: { ...s.sources, [id]: v } })); this.touch(id); }
+  toggleTask = (idx) => { const id = this.state.activeId; const lines = (this.state.sources[id] || '').split('\n'); if (!lines[idx]) return; lines[idx] = /\[x\]/i.test(lines[idx]) ? lines[idx].replace(/\[x\]/i, '[ ]') : lines[idx].replace(/\[ \]/, '[x]'); this.setSource(id, lines.join('\n')); };
+  openOrCreate = (title) => { const f = this.allFiles().find(x => x.title.toLowerCase() === title.toLowerCase()); if (f) { this.open(f.id); return; } const id = 'note-' + this.slug(title); this.setState(s => ({ dynamicFiles: [...s.dynamicFiles, { id, title, file: this.slug(title) + '.md', type: 'md', folder: 'Notes', pinned: false }], sources: { ...s.sources, [id]: '# ' + title + '\n\n' }, activeId: id, openTabs: [...s.openTabs, id] })); };
+
+  openInBrowser = (html) => { try { const w = window.open('', '_blank'); if (w) { w.document.open(); w.document.write(html); w.document.close(); } } catch (e) {} };
+  openCapture = () => this.setState({ captureOpen: true, captureText: '' });
+  dailyTitle() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  ensureDaily() { const title = this.dailyTitle(); const id = 'daily-' + title; if (!this.fileOf(id)) { this.setState(s => ({ dynamicFiles: [...s.dynamicFiles, { id, title, file: title + '.md', type: 'md', folder: 'Daily', pinned: false }], sources: { ...s.sources, [id]: '---\ntags: [daily]\n---\n# ' + title + '\n\n' } })); } return id; }
+  openDaily = () => { const id = this.ensureDaily(); setTimeout(() => this.open(id), 0); };
+  saveCapture = () => { const txt = this.state.captureText.trim(); if (!txt) { this.setState({ captureOpen: false }); return; } const id = this.ensureDaily(); const t = new Date(); const stamp = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); setTimeout(() => { this.setState(s => ({ sources: { ...s.sources, [id]: (s.sources[id] || '') + '- ' + stamp + ' ' + txt + '\n' }, captureOpen: false, captureText: '', activeId: id, openTabs: s.openTabs.includes(id) ? s.openTabs : [...s.openTabs, id] })); }, 0); };
+  currentExportHtml() { const a = this.fileOf(this.state.activeId); if (!a) return ''; if (a.type === 'md') { const fr = this.parseFront(this.state.sources[a.id] || ''); return this.mdToHtml(fr.body, fr.offset); } if (a.type === 'html') return this.state.sources[a.id] || ''; const d = this.state.eml[a.id] || {}; return d.body || ''; }
+  exportPrint = () => { const a = this.fileOf(this.state.activeId); const w = window.open('', '_blank'); if (!w) return; w.document.write('<!doctype html><meta charset="utf-8"><title>' + (a ? a.title : '') + '</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#26241f">' + this.currentExportHtml() + '</body>'); w.document.close(); setTimeout(() => { try { w.print(); } catch (e) {} }, 350); };
+  download(name, text, type) { try { const b = new Blob([text], { type: type || 'text/plain' }); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href = u; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(u), 1000); } catch (e) {} }
+  exportDownload = () => { const a = this.fileOf(this.state.activeId); if (!a) return; if (a.type === 'eml') { const d = this.state.eml[a.id] || {}; const eml = 'From: ' + d.from + '\nTo: ' + d.to + '\nSubject: ' + d.subject + '\nContent-Type: text/html\n\n' + d.body; this.download(a.file, eml, 'message/rfc822'); } else { this.download(a.file, this.state.sources[a.id] || '', 'text/plain'); } };
+  exportDoc = () => { const a = this.fileOf(this.state.activeId); if (!a) return; const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>' + this.currentExportHtml() + '</body></html>'; this.download((a.title || 'document') + '.doc', html, 'application/msword'); };
+  exportCopyHtml = () => { if (navigator.clipboard) navigator.clipboard.writeText(this.currentExportHtml()); };
+
+  _previewClick = (e) => {
+    const t = e.target.closest('[data-copy],[data-task],[data-wiki]'); if (!t) return;
+    if (t.hasAttribute('data-copy')) { const raw = this._codeBlocks[t.getAttribute('data-copy')]; if (raw && navigator.clipboard) navigator.clipboard.writeText(raw); const o = t.textContent; t.textContent = 'Copied'; setTimeout(() => { try { t.textContent = o; } catch (e) {} }, 1000); return; }
+    if (t.hasAttribute('data-task')) { this.toggleTask(+t.getAttribute('data-task')); return; }
+    if (t.hasAttribute('data-wiki')) { this.openOrCreate(t.getAttribute('data-wiki')); return; }
+  };
+
+  onSourceInput = (e) => {
+    const id = this.state.activeId; const v = e.target.value; const caret = e.target.selectionStart;
+    const before = v.slice(0, caret); let sug = null;
+    const mw = /\[\[([^\]\n]*)$/.exec(before);
+    const ms = /(?:^|\n)\/(\w*)$/.exec(before);
+    if (mw) sug = { kind: 'wiki', q: mw[1], caret };
+    else if (ms) sug = { kind: 'slash', q: ms[1], caret };
+    this.setState(s => ({ sources: { ...s.sources, [id]: v }, suggest: sug }));
+  };
+  pickSuggest = (item) => {
+    const id = this.state.activeId; const sg = this.state.suggest; if (!sg) return;
+    const v = this.state.sources[id] || ''; const caret = sg.caret;
+    const removeLen = (sg.kind === 'wiki' ? 2 : 1) + sg.q.length;
+    const start = caret - removeLen;
+    const insert = sg.kind === 'wiki' ? '[[' + item + ']]' : item;
+    const nv = v.slice(0, start) + insert + v.slice(caret);
+    this.setState({ sources: { ...this.state.sources, [id]: nv }, suggest: null }, () => { const el = this._sourceEl; if (el) { const pos = start + insert.length; setTimeout(() => { try { el.focus(); el.setSelectionRange(pos, pos); } catch (e) {} }, 10); } });
+  };
+
+  renderVals() {
+    const st = this.state;
+    const active = st.activeId ? this.fileOf(st.activeId) : null;
+    const accent = 'oklch(0.5 0.12 264)', accentSoft = 'oklch(0.95 0.025 264)';
+
+    const mkView = (k, label) => ({ label, onClick: () => this.setState({ view: k }), style: 'padding:4px 11px;border-radius:6px;cursor:pointer;' + (st.view === k ? 'background:#fffefb;color:#26241f;box-shadow:0 1px 2px rgba(0,0,0,.1)' : 'color:#8a8a8f') });
+    const viewBtns = [mkView('edit', 'edit'), mkView('split', 'split'), mkView('preview', 'preview')];
+
+    const all = this.allFiles();
+    const cnt = (fn) => all.filter(fn).length;
+    const fdefs = [
+      { key: 'all', label: 'All Notes', count: all.length, color: '#8a8a93' },
+      { key: 'pinned', label: 'Pinned', count: cnt(f => f.pinned), star: true },
+      { key: 'markdown', label: 'Markdown', count: cnt(f => f.type === 'md'), color: '#6c7686' },
+      { key: 'html', label: 'HTML', count: cnt(f => f.type === 'html'), color: '#b5651d' },
+      { key: 'email', label: 'Email Templates', count: cnt(f => f.type === 'eml'), color: '#3a6ea5' }
+    ];
+    const filters = fdefs.map(f => { const on = st.filter === f.key; return { label: f.label, count: f.count, onClick: () => this.setState({ filter: f.key }), rowStyle: 'display:flex;align-items:center;gap:10px;padding:6px 11px;border-radius:8px;font-size:13px;cursor:pointer;' + (on ? 'background:' + accentSoft + ';color:oklch(0.45 0.11 264);font-weight:500' : 'color:#4a4a4c'), markText: f.star ? '★' : '', markStyle: f.star ? 'color:#d6a419;font-size:12px;width:8px;display:flex;justify-content:center' : ('width:8px;height:8px;border-radius:2px;flex:none;background:' + f.color), countStyle: 'font-size:11px;color:' + (on ? 'oklch(0.55 0.09 264)' : '#bdb8af') }; });
+    const railFilters = fdefs.map(f => { const on = st.filter === f.key; return { label: f.label, onClick: () => this.setState({ filter: f.key, collapsed: false }), style: 'width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;cursor:pointer;' + (on ? 'background:' + accentSoft : ''), markText: f.star ? '★' : '', markStyle: f.star ? 'color:#d6a419;font-size:14px' : ('width:11px;height:11px;border-radius:3px;background:' + f.color) }; });
+
+    // tags
+    const tagCount = {};
+    all.forEach(f => this.fileTags(f.id).forEach(t => tagCount[t] = (tagCount[t] || 0) + 1));
+    const tagItems = Object.keys(tagCount).sort().map(t => { const on = st.filter === 'tag:' + t; return { label: t, count: tagCount[t], onClick: () => this.setState({ filter: 'tag:' + t }), style: 'display:flex;align-items:center;gap:4px;font:500 11px -apple-system,system-ui;padding:3px 9px;border-radius:11px;cursor:pointer;' + (on ? 'background:oklch(0.9 0.05 264);color:oklch(0.4 0.13 264)' : 'background:#ece9e2;color:#6e6e73') }; });
+
+    const recentDocs = all
+      .filter(f => st.editedAt[f.id])
+      .sort((a, b) => st.editedAt[b.id] - st.editedAt[a.id])
+      .slice(0, 6)
+      .map(f => { const on = f.id === st.activeId; const bc = this.badgeColors[f.type]; return { title: f.title, ago: this.agoLabel(st.editedAt[f.id]), badge: f.type.toUpperCase(), onClick: () => this.open(f.id), style: 'display:flex;align-items:center;gap:8px;padding:6px 11px;border-radius:8px;font-size:12.5px;cursor:pointer;' + (on ? 'background:' + accentSoft + ';color:oklch(0.45 0.11 264);font-weight:500' : 'color:#6e6e73'), badgeStyle: 'font:600 8px ui-monospace,Menlo,monospace;flex:none;padding:1px 3px;border-radius:3px;color:' + bc.c + ';background:' + bc.b }; });
+
+    const pred = (f) => {
+      const k = st.filter;
+      if (k === 'all') return true;
+      if (k === 'pinned') return f.pinned;
+      if (k === 'markdown') return f.type === 'md';
+      if (k === 'html') return f.type === 'html';
+      if (k === 'email') return f.type === 'eml';
+      if (k === 'smart:recent') return true;
+      if (k === 'smart:reports') return f.type === 'eml';
+      if (k === 'smart:pinnedmd') return f.type === 'md' && f.pinned;
+      if (k.startsWith('tag:')) return this.fileTags(f.id).includes(k.slice(4));
+      return true;
+    };
+    const order = ['Engineering', 'Product', 'Web', 'Reports', 'Notes', 'Daily'];
+    const childrenOf = (pid) => all.filter(f => f.parent === pid);
+    const mkRow = (f, depth) => {
+      const a = f.id === st.activeId; const bc = this.badgeColors[f.type];
+      const kids = childrenOf(f.id); const expanded = st.expandedDocs[f.id];
+      return {
+        title: f.title, badge: f.type.toUpperCase(), onOpen: () => this.open(f.id),
+        rowStyle: 'display:flex;align-items:center;gap:7px;padding:5px 11px 5px ' + (30 + depth * 16) + 'px;border-radius:8px;font-size:12.5px;cursor:pointer;' + (a ? 'background:' + accentSoft + ';color:oklch(0.45 0.11 264);font-weight:500' : 'color:#6e6e73'),
+        badgeStyle: 'font:600 8px ui-monospace,Menlo,monospace;flex:none;padding:1px 3px;border-radius:3px;color:' + bc.c + ';background:' + bc.b,
+        star: f.pinned ? '★' : '', starStyle: f.pinned ? 'color:#d6a419;font-size:10px' : 'display:none',
+        caret: kids.length ? (expanded ? '▾' : '▸') : '', caretStyle: kids.length ? 'color:#bdb8af;font-size:9px;width:10px;flex:none;cursor:pointer;margin-left:-15px' : 'width:0;flex:none',
+        onToggle: kids.length ? (e) => { e.stopPropagation(); this.setState(s => ({ expandedDocs: { ...s.expandedDocs, [f.id]: !s.expandedDocs[f.id] } })); } : undefined
+      };
+    };
+    const folders = order.map(name => {
+      const list = [];
+      all.filter(f => f.folder === name && !f.parent && pred(f)).forEach(f => {
+        list.push(mkRow(f, 0));
+        if (st.expandedDocs[f.id]) childrenOf(f.id).filter(pred).forEach(c => list.push(mkRow(c, 1)));
+      });
+      return { name, files: list };
+    }).filter(g => g.files.length);
+
+    const tabs = st.openTabs.map(id => { const f = this.fileOf(id); if (!f) return null; const on = id === st.activeId; const bc = this.badgeColors[f.type]; return { file: f.file, badge: f.type.toUpperCase(), onClick: () => this.setState({ activeId: id }), onClose: (e) => this.closeTab(id, e), style: 'display:flex;align-items:center;gap:7px;padding:0 12px;flex:none;cursor:pointer;border-right:1px solid rgba(0,0,0,.06);' + (on ? 'background:#fffefb;color:#26241f;box-shadow:inset 0 -2px 0 oklch(0.55 0.12 264)' : 'color:#8a8a8f'), badgeStyle: 'font:600 8px ui-monospace,Menlo,monospace;padding:1px 3px;border-radius:3px;color:' + bc.c + ';background:' + bc.b }; }).filter(Boolean);
+
+    const isEml = active && active.type === 'eml', isHtml = active && active.type === 'html', isMd = active && active.type === 'md';
+    const showSource = active && (st.view === 'edit' || st.view === 'split');
+    const showPreview = active && (st.view === 'preview' || st.view === 'split');
+
+    let previewEl = null, sourceValue = '', outline = [], words = 0, activeTags = [];
+    let emlSubject = '', emlFrom = '', emlTo = '', emlBody = '';
+    if (active) {
+      if (isMd) {
+        sourceValue = st.sources[active.id] || '';
+        const fr = this.parseFront(sourceValue);
+        words = this.wordCount(fr.body); outline = this.outlineMd(fr.body);
+        activeTags = fr.tags.map(t => ({ label: t, onClick: () => this.setState({ filter: 'tag:' + t }) }));
+        const html = this.mdToHtml(fr.body, fr.offset);
+        previewEl = React.createElement('div', { ref: n => this._preview = n, style: { maxWidth: '640px', margin: '0 auto' }, onClick: this._previewClick, dangerouslySetInnerHTML: { __html: html } });
+      } else if (isHtml) {
+        sourceValue = st.sources[active.id] || '';
+        words = this.wordCount(sourceValue); outline = this.outlineHtml(sourceValue);
+        const widths = { desktop: '100%', tablet: '768px', mobile: '390px' };
+        const devBtn = (key, label) => React.createElement('span', { key, onClick: () => this.setState({ htmlWidth: key }), style: { padding: '4px 11px', borderRadius: '6px', cursor: 'pointer', font: '500 11.5px -apple-system,system-ui', color: st.htmlWidth === key ? '#26241f' : '#8a8a8f', background: st.htmlWidth === key ? '#fffefb' : 'transparent', boxShadow: st.htmlWidth === key ? '0 1px 2px rgba(0,0,0,.1)' : 'none' } }, label);
+        const bar = React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', borderBottom: '1px solid rgba(0,0,0,.07)', background: '#faf9f7', flex: 'none' } },
+          React.createElement('div', { style: { display: 'flex', gap: '2px', background: '#f0eee9', borderRadius: '8px', padding: '2px' } }, devBtn('desktop', 'Desktop'), devBtn('tablet', 'Tablet'), devBtn('mobile', 'Mobile')),
+          React.createElement('span', { style: { marginLeft: 'auto', font: '11px ui-monospace,Menlo,monospace', color: '#bdb8af' } }, widths[st.htmlWidth]),
+          React.createElement('span', { onClick: () => this.openInBrowser(sourceValue), style: { font: '500 11.5px -apple-system,system-ui', color: 'oklch(0.5 0.12 264)', cursor: 'pointer' } }, '↗ Open in browser'));
+        const frame = React.createElement('div', { style: { flex: 1, display: 'flex', justifyContent: 'center', overflow: 'auto', padding: '16px', background: '#ece9e2', minHeight: 0 } },
+          React.createElement('iframe', { srcDoc: sourceValue, title: 'preview', style: { width: widths[st.htmlWidth], maxWidth: '100%', height: '100%', minHeight: '520px', border: '1px solid rgba(0,0,0,.12)', borderRadius: '10px', background: '#fff', boxShadow: '0 6px 24px -10px rgba(0,0,0,.2)' } }));
+        previewEl = React.createElement('div', { style: { display: 'flex', flexDirection: 'column', height: '100%' } }, bar, frame);
+      } else if (isEml) {
+        const d = st.eml[active.id] || { from: '', to: '', subject: '', body: '' };
+        emlSubject = d.subject; emlFrom = d.from; emlTo = d.to; emlBody = d.body;
+        words = this.wordCount(d.body); outline = this.outlineHtml(d.body);
+        const card = '<div style="max-width:660px;margin:0 auto;background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:13px;overflow:hidden;box-shadow:0 6px 24px -10px rgba(0,0,0,.18)"><div style="padding:18px 24px;background:#faf9f6;border-bottom:1px solid rgba(0,0,0,.07)"><div style="font:600 17px -apple-system,system-ui;color:#26241f;margin-bottom:10px">' + this.esc(d.subject) + '</div><div style="display:flex;gap:8px;font:12px ui-monospace,Menlo,monospace;color:#8a8a8f;margin-bottom:3px"><span style="color:#bdb8af;width:42px">From</span>' + this.esc(d.from) + '</div><div style="display:flex;gap:8px;font:12px ui-monospace,Menlo,monospace;color:#8a8a8f"><span style="color:#bdb8af;width:42px">To</span>' + this.esc(d.to) + '</div></div><div style="padding:26px 28px">' + d.body + '</div></div>';
+        previewEl = React.createElement('div', { ref: n => this._preview = n, dangerouslySetInnerHTML: { __html: card } });
+      }
+    }
+
+    const outlineItems = outline.map(o => ({ text: o.text, onClick: () => this.scrollTo(o.id), style: 'cursor:pointer;font-size:12.5px;padding:3px 0 3px ' + ((o.level - 1) * 12) + 'px;color:' + (o.level === 1 ? '#403d37' : '#8a8a8f') + ';' + (o.level === 1 ? 'font-weight:500' : '') }));
+    const bl = (active && this.backlinkMap[active.id]) || [];
+    const backlinks = bl.map(b => ({ title: b.title, snippet: b.snippet, onClick: () => this.open(b.id) }));
+
+    // palette (file name + full-text)
+    const q = st.paletteQuery.trim().toLowerCase();
+    const bodyOf = (f) => f.type === 'eml' ? ((st.eml[f.id] || {}).body || '') : (st.sources[f.id] || '');
+    const titleHits = all.filter(f => !q || f.title.toLowerCase().includes(q) || f.file.toLowerCase().includes(q));
+    const fileResults = titleHits.map(f => { const bc = this.badgeColors[f.type]; return { title: f.title, hint: f.folder, icon: f.type.toUpperCase(), iconStyle: 'font:600 8px ui-monospace,Menlo,monospace;flex:none;width:26px;text-align:center;padding:3px 0;border-radius:4px;color:' + bc.c + ';background:' + bc.b, run: () => this.setState({ paletteOpen: false }, () => this.open(f.id)) }; });
+    const textResults = [];
+    if (q) {
+      const titleIds = new Set(titleHits.map(f => f.id));
+      all.forEach(f => {
+        if (titleIds.has(f.id)) return;
+        const body = bodyOf(f).replace(/<[^>]+>/g, ' ');
+        const idx = body.toLowerCase().indexOf(q);
+        if (idx < 0) return;
+        const snip = body.slice(Math.max(0, idx - 22), idx + 32).replace(/\s+/g, ' ').trim();
+        textResults.push({ title: f.title, hint: '…' + snip + '…', icon: '⌕', iconStyle: 'flex:none;width:26px;text-align:center;color:#a8a29a;font-size:13px', run: () => this.setState({ paletteOpen: false }, () => this.open(f.id)) });
+      });
+    }
+    const cmds = [
+      { title: 'New Markdown Note', run: () => this.setState({ paletteOpen: false }, () => this.openOrCreate('Untitled ' + (this.state.dynamicFiles.length + 1))) },
+      { title: "Open Today's Daily Note", run: () => this.setState({ paletteOpen: false }, () => this.openDaily()) },
+      { title: 'Quick Capture', run: () => this.setState({ paletteOpen: false }, () => this.openCapture()) },
+      { title: 'Graph View', run: () => this.setState({ graphOpen: true, paletteOpen: false }) },
+      { title: 'Toggle Sidebar', run: () => this.setState(s => ({ collapsed: !s.collapsed, paletteOpen: false })) },
+      { title: 'Find & Replace', run: () => this.setState({ findOpen: true, paletteOpen: false }) },
+      { title: 'Version History', run: () => this.setState({ historyOpen: true, historyPick: 0, paletteOpen: false }) },
+      { title: 'Keyboard Shortcuts', run: () => this.setState({ shortcutsOpen: true, paletteOpen: false }) },
+      { title: 'New Window', run: () => { try { window.open(location.href, '_blank'); } catch (e) {} this.setState({ paletteOpen: false }); } },
+      { title: 'Open Settings', run: () => this.setState({ settingsOpen: true, paletteOpen: false }) }
+    ].filter(c => !q || c.title.toLowerCase().includes(q)).map(c => ({ title: c.title, hint: 'command', icon: '⌘', iconStyle: 'flex:none;width:26px;text-align:center;color:#a8a29a;font-size:13px', run: c.run }));
+    const allResults = [...fileResults, ...textResults, ...cmds];
+    this._results = allResults;
+    const pidx = Math.min(st.paletteIdx, Math.max(0, allResults.length - 1));
+    const paletteResults = allResults.map((r, i) => ({ title: r.title, hint: r.hint, icon: r.icon, iconStyle: r.iconStyle, onClick: r.run, style: 'display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:9px;cursor:pointer;' + (i === pidx ? 'background:' + accentSoft : '') }));
+
+    // find & replace
+    let findCount = '';
+    if (st.findQuery && active && (isMd || isHtml)) {
+      try { const re = st.findRegex ? new RegExp(st.findQuery, 'g') : new RegExp(st.findQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); const m = (st.sources[active.id] || '').match(re); findCount = (m ? m.length : 0) + ' found'; } catch (e) { findCount = 'bad regex'; }
+    }
+    const replaceAll = () => { if (!active || !st.findQuery) return; try { const re = st.findRegex ? new RegExp(st.findQuery, 'g') : new RegExp(st.findQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'); this.setSource(active.id, (st.sources[active.id] || '').replace(re, st.replaceQuery)); } catch (e) {} };
+    const findNext = () => { const el = this._sourceEl; if (!el || !st.findQuery) return; const txt = el.value; const from = (el.selectionEnd || 0); let idx = txt.indexOf(st.findQuery, from); if (idx === -1) idx = txt.indexOf(st.findQuery, 0); if (idx >= 0) { el.focus(); el.setSelectionRange(idx, idx + st.findQuery.length); } };
+
+    // suggestions
+    let suggestItems = [], suggestTitle = '';
+    if (st.suggest) {
+      const sq = st.suggest.q.toLowerCase();
+      if (st.suggest.kind === 'wiki') {
+        suggestTitle = 'LINK TO NOTE';
+        suggestItems = all.filter(f => f.title.toLowerCase().includes(sq)).slice(0, 5).map(f => ({ label: f.title, hint: f.type, icon: '🔗', iconStyle: 'font-size:12px', onClick: () => this.pickSuggest(f.title) }));
+        if (sq && !all.some(f => f.title.toLowerCase() === sq)) suggestItems.push({ label: 'Create “' + st.suggest.q + '”', hint: 'new', icon: '＋', iconStyle: 'color:oklch(0.5 0.12 264)', onClick: () => this.pickSuggest(st.suggest.q) });
+      } else {
+        suggestTitle = 'INSERT BLOCK';
+        suggestItems = this.slashDefs.filter(d => d.label.toLowerCase().includes(sq)).map(d => ({ label: d.label, hint: d.hint, icon: '▦', iconStyle: 'color:#bdb8af;font-size:12px', onClick: () => this.pickSuggest(d.ins) }));
+      }
+    }
+
+    // history
+    const canHistory = active && (isMd || isHtml);
+    const hid = active ? active.id : null;
+    const hist = (hid && st.history[hid]) || [];
+    const curText = canHistory ? (st.sources[hid] || '') : '';
+    const historyList = [{ label: 'Current version', ts: 'now', idx: -1 }].concat(hist.map((h, i) => ({ label: 'Version ' + (hist.length - i), ts: h.ts, idx: i }))).map(h => ({ label: h.label, ts: h.ts, onClick: () => this.setState({ historyPick: h.idx }), style: 'padding:9px 11px;border-radius:8px;cursor:pointer;margin-bottom:2px;' + (h.idx === st.historyPick ? 'background:' + accentSoft : '') }));
+    const snap = st.historyPick >= 0 ? hist[st.historyPick] : null;
+    let diffRows = [];
+    if (snap) diffRows = this.diffLines(snap.text.split('\n'), curText.split('\n')).map(r => ({ text: (r.t === 'add' ? '+ ' : r.t === 'del' ? '− ' : '  ') + r.v, style: 'white-space:pre-wrap;padding:1px 6px;border-radius:3px;' + (r.t === 'add' ? 'background:rgba(26,138,79,.12);color:#157a44' : r.t === 'del' ? 'background:rgba(192,57,43,.1);color:#b0392b' : 'color:#8a8a8f') }));
+
+    const tgl = (on) => ({ track: 'width:38px;height:22px;border-radius:11px;flex:none;padding:2px;display:flex;transition:.15s;background:' + (on ? accent : '#d8d4cc') + ';justify-content:' + (on ? 'flex-end' : 'flex-start'), knob: 'width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)' });
+    const wt = tgl(st.wiki), at = tgl(st.autosave);
+
+    // unlinked mentions
+    const unlinked = [];
+    if (active) {
+      const title = active.title.toLowerCase();
+      all.forEach(f => {
+        if (f.id === active.id) return;
+        const raw = bodyOf(f);
+        if (raw.toLowerCase().includes(title) && !raw.toLowerCase().includes('[[' + title)) {
+          const flat = raw.replace(/<[^>]+>/g, ' '); const idx = flat.toLowerCase().indexOf(title);
+          const snip = flat.slice(Math.max(0, idx - 24), idx + title.length + 24).replace(/\s+/g, ' ').trim();
+          unlinked.push({ title: f.title, snippet: '…' + snip + '…', onClick: () => this.open(f.id) });
+        }
+      });
+    }
+
+    // graph
+    const gIndex = {}; all.forEach(f => gIndex[f.title.toLowerCase()] = f.id);
+    const cx = 360, cy = 200, RAD = 150, fillByType = { md: '#dfe3ea', html: '#f1e3d3', eml: '#dde7f2' };
+    const posOf = {}; all.forEach((f, i) => { const a = (i / all.length) * Math.PI * 2 - Math.PI / 2; posOf[f.id] = { x: cx + RAD * Math.cos(a), y: cy + RAD * Math.sin(a) }; });
+    const graphNodes = all.map(f => { const p = posOf[f.id]; const on = f.id === st.activeId; return { x: p.x, y: p.y, ty: p.y + 26, r: on ? 13 : 10, fill: on ? 'oklch(0.86 0.07 264)' : fillByType[f.type], stroke: on ? 'oklch(0.5 0.12 264)' : 'rgba(0,0,0,.14)', label: f.title.length > 16 ? f.title.slice(0, 15) + '…' : f.title, onClick: () => this.setState(s => ({ graphOpen: false, activeId: f.id, openTabs: s.openTabs.includes(f.id) ? s.openTabs : [...s.openTabs, f.id] })) }; });
+    const graphEdges = []; all.forEach(f => { const raw = bodyOf(f); const re = /\[\[([^\]]+)\]\]/g; let m; while ((m = re.exec(raw))) { const tid = gIndex[m[1].toLowerCase()]; if (tid && posOf[tid] && posOf[f.id] && tid !== f.id) graphEdges.push({ x1: posOf[f.id].x, y1: posOf[f.id].y, x2: posOf[tid].x, y2: posOf[tid].y }); } });
+
+    // export menu
+    const exportItems = active ? [
+      { icon: '⎙', label: 'Print / Save as PDF', onClick: () => { this.setState({ exportOpen: false }); this.exportPrint(); } },
+      { icon: '↓', label: 'Download ' + (isHtml ? '.html' : isEml ? '.eml' : '.md'), onClick: () => { this.setState({ exportOpen: false }); this.exportDownload(); } },
+      { icon: 'W', label: 'Download Word .doc', onClick: () => { this.setState({ exportOpen: false }); this.exportDoc(); } },
+      { icon: '⧉', label: 'Copy as HTML', onClick: () => { this.setState({ exportOpen: false }); this.exportCopyHtml(); } }
+    ] : [];
+
+    const shortcuts = [
+      { label: 'Command palette / quick open', keys: '⌘K' },
+      { label: 'Find & replace', keys: '⌘F' },
+      { label: 'Toggle edit / preview', keys: '⌘E' },
+      { label: 'Graph view', keys: '⌘G' },
+      { label: 'Quick capture', keys: '⌘⇧N' },
+      { label: 'Switch to tab 1–9', keys: '⌘1–9' },
+      { label: 'Close tab', keys: '⌘W' },
+      { label: 'Toggle sidebar', keys: '⌘\\' },
+      { label: 'This help', keys: '⌘/' }
+    ];
+
+    // breadcrumb: folder / ancestor docs… / file — each segment clickable
+    let pathSegments = [];
+    if (active) {
+      const ancestors = []; let p = active.parent;
+      while (p) { const pf = this.fileOf(p); if (!pf) break; ancestors.unshift(pf); p = pf.parent; }
+      const segDefs = [];
+      const firstInFolder = all.find(f => f.folder === active.folder && !f.parent);
+      segDefs.push({ label: active.folder, title: 'Folder · ' + active.folder, onClick: firstInFolder ? () => this.open(firstInFolder.id) : undefined, current: false });
+      ancestors.forEach(a => segDefs.push({ label: a.title, title: a.file, onClick: () => this.open(a.id), current: false }));
+      segDefs.push({ label: active.file, title: active.file, onClick: undefined, current: true });
+      pathSegments = segDefs.map((s, i) => ({
+        label: s.label, title: s.title || s.label, onClick: s.onClick,
+        sepStyle: 'font:500 11px ui-monospace,Menlo,monospace;color:#d6d1c7;flex:none;' + (i === 0 ? 'display:none' : ''),
+        style: 'font:500 11px ui-monospace,Menlo,monospace;flex:none;white-space:nowrap;border-radius:5px;padding:2px 5px;' + (s.current ? 'color:#8a8a8f' : 'color:#bdb8af;cursor:pointer'),
+        hoverStyle: s.current ? '' : 'background:#f0eee9;color:#403d37'
+      }));
+    }
+
+    return {
+      sidebarExpanded: !st.collapsed, sidebarCollapsed: st.collapsed,
+      toggleSidebar: () => this.setState(s => ({ collapsed: !s.collapsed })),
+      openPalette: () => this.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 }),
+      openGraph: () => this.setState({ graphOpen: true }), closeGraph: () => this.setState({ graphOpen: false }),
+      graphOpen: st.graphOpen, graphNodes, graphEdges,
+      captureOpen: st.captureOpen, openCapture: this.openCapture, closeCapture: () => this.setState({ captureOpen: false }), captureText: st.captureText, onCaptureInput: (e) => this.setState({ captureText: e.target.value }), onCaptureKey: (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') this.saveCapture(); }, captureRef: (n) => this._capInput = n, saveCapture: this.saveCapture,
+      shortcutsOpen: st.shortcutsOpen, closeShortcuts: () => this.setState({ shortcutsOpen: false }), shortcuts,
+      exportOpen: st.exportOpen, toggleExport: () => this.setState(s => ({ exportOpen: !s.exportOpen })), exportItems,
+      unlinked, hasUnlinked: unlinked.length > 0, unlinkedCount: unlinked.length,
+      closePalette: () => this.setState({ paletteOpen: false }),
+      openSettings: () => this.setState({ settingsOpen: true }), closeSettings: () => this.setState({ settingsOpen: false }),
+      stop: (e) => e.stopPropagation(),
+      paletteOpen: st.paletteOpen, settingsOpen: st.settingsOpen, paletteQuery: st.paletteQuery,
+      onPaletteInput: (e) => this.setState({ paletteQuery: e.target.value, paletteIdx: 0 }),
+      onPaletteKey: (e) => { const rs = this._results || []; if (e.key === 'ArrowDown') { e.preventDefault(); this.setState(s => ({ paletteIdx: Math.min(s.paletteIdx + 1, rs.length - 1) })); } else if (e.key === 'ArrowUp') { e.preventDefault(); this.setState(s => ({ paletteIdx: Math.max(s.paletteIdx - 1, 0) })); } else if (e.key === 'Enter') { const r = rs[Math.min(this.state.paletteIdx, rs.length - 1)]; if (r) r.run(); } },
+      paletteRef: (n) => this._pInput = n, paletteResults, paletteEmpty: paletteResults.length === 0,
+      viewBtns, settingsViewBtns: viewBtns, filters, railFilters, folders, tabs, tagItems, recentDocs,
+
+      hasActive: !!active, noActive: !active,
+      pathSegments: pathSegments,
+      activeTags, canHistory: !!canHistory,
+      activeTypeLabel: active ? this.typeLabels[active.type] : '',
+      wordCount: words, backlinkCount: backlinks.length,
+
+      showSource, showPreview, isEml, isTextSource: isMd || isHtml,
+      sourcePaneStyle: 'flex:1;min-width:0;overflow:auto;background:#fffefb;' + (showPreview ? 'border-right:1px solid rgba(0,0,0,.07)' : ''),
+      previewPaneStyle: 'flex:1;min-width:0;overflow:auto;padding:' + (isHtml ? '0' : '40px 44px') + ';background:' + (isEml ? '#f3f1ec' : '#fffefb'),
+      previewEl, sourceValue,
+      onSource: this.onSourceInput, sourceRef: (n) => this._sourceEl = n,
+      onSourceKey: (e) => { if (e.key === 'Escape') this.setState({ suggest: null }); },
+      emlSubject, emlFrom, emlTo, emlBody,
+      onEmlSubject: (e) => this.setEml(active.id, 'subject', e.target.value),
+      onEmlFrom: (e) => this.setEml(active.id, 'from', e.target.value),
+      onEmlTo: (e) => this.setEml(active.id, 'to', e.target.value),
+      onEmlBody: (e) => this.setEml(active.id, 'body', e.target.value),
+      aiGenerate: this.aiGenerate,
+
+      railVisible: !!active && (this.props.showRightSidebar ?? true) && !st.railHidden,
+      toggleRail: () => this.setState(s => ({ railHidden: !s.railHidden })),
+      railBtnStyle: 'display:flex;align-items:center;justify-content:center;width:30px;height:28px;border-radius:7px;cursor:pointer;flex:none;' + (!st.railHidden && (this.props.showRightSidebar ?? true) && active ? 'background:oklch(0.95 0.025 264)' : ''),
+      outline: outlineItems, hasOutline: outlineItems.length > 0, noOutline: !!active && outlineItems.length === 0,
+      backlinks, hasBacklinks: backlinks.length > 0, noBacklinks: backlinks.length === 0,
+
+      findOpen: st.findOpen, findQuery: st.findQuery, replaceQuery: st.replaceQuery, findCount,
+      onFindInput: (e) => this.setState({ findQuery: e.target.value }),
+      onReplaceInput: (e) => this.setState({ replaceQuery: e.target.value }),
+      toggleRegex: () => this.setState(s => ({ findRegex: !s.findRegex })),
+      regexChip: 'font:500 11px ui-monospace,Menlo,monospace;padding:4px 9px;border-radius:7px;cursor:pointer;' + (st.findRegex ? 'background:oklch(0.92 0.045 264);color:oklch(0.42 0.13 264)' : 'background:#f0eee9;color:#a8a29a'),
+      replaceAll, findNext, closeFind: () => this.setState({ findOpen: false }),
+
+      suggestOpen: suggestItems.length > 0, suggestItems, suggestTitle,
+
+      historyOpen: st.historyOpen, openHistory: () => this.setState({ historyOpen: true, historyPick: 0 }), closeHistory: () => this.setState({ historyOpen: false }),
+      historyFile: active ? active.file : '', historyList,
+      diffRows, hasDiff: diffRows.length > 0, noDiff: !snap,
+      saveSnapshot: () => { if (!hid) return; this.setState(s => ({ history: { ...s.history, [hid]: [{ ts: this.now(), text: s.sources[hid] || '' }, ...((s.history[hid]) || [])] } })); },
+      restore: () => { if (snap) { this.setSource(hid, snap.text); this.setState({ historyOpen: false }); } },
+      restoreStyle: 'font:500 12px -apple-system,system-ui;padding:7px 14px;border-radius:8px;cursor:pointer;' + (snap ? 'background:oklch(0.5 0.12 264);color:#fff' : 'background:#ece9e2;color:#bdb8af;pointer-events:none'),
+
+      toggleWiki: () => this.setState(s => ({ wiki: !s.wiki })), toggleAutosave: () => this.setState(s => ({ autosave: !s.autosave })),
+      wikiToggleTrack: wt.track, wikiToggleKnob: wt.knob, autosaveToggleTrack: at.track, autosaveToggleKnob: at.knob
+    };
+  }
+}
+</script>
+</body>
+</html>
