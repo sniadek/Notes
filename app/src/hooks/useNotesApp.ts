@@ -608,20 +608,17 @@ export function useNotesApp(showRightSidebar = true) {
     return segs;
   }, [active, all, fileOf]);
 
-  const wordsAndBacklinkCount = { words, backlinkCount: backlinks.length };
-
   return {
     state, setState, stateRef,
     all, fileOf, fileTags, allFiles: all,
     badgeColors, typeLabels,
     active, isMd, isHtml, isEml, showSource, showPreview,
     sourceValue, mdHtml, outline, words, activeTags, emlData,
-    backlinks, unlinked, graph, paletteResults, runPaletteResult,
+    backlinks, backlinkCount: backlinks.length, unlinked, graph, paletteResults, runPaletteResult,
     findCount, replaceAllFn, findNextFn,
     suggestItems, suggestTitle, pickSuggest,
     canHistory, historyList: hist, snap, diffRows, saveSnapshot, restore,
     recentDocs, tagCount, folders, pathSegments,
-    ...wordsAndBacklinkCount,
     accent: ACCENT, accentSoft: ACCENT_SOFT,
     showRightSidebar,
     // refs
