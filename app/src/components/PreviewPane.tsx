@@ -16,9 +16,16 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
     return (
       <div className="sc" style={paneStyle}>
         <div
+          key={vm.active?.id}
           ref={vm.previewElRef}
-          style={{ maxWidth: 640, margin: '0 auto' }}
+          contentEditable
+          suppressContentEditableWarning
+          style={{ maxWidth: 640, margin: '0 auto', outline: 'none' }}
           onClick={vm.onPreviewClick}
+          onBlur={(e) => {
+            if (!vm.active) return;
+            vm.setSource(vm.active.id, vm.htmlToMd(e.currentTarget.innerHTML));
+          }}
           dangerouslySetInnerHTML={{ __html: mdHtml }}
         />
       </div>

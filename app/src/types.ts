@@ -8,6 +8,7 @@ export interface NoteFile {
   folder: string;
   pinned: boolean;
   parent?: string;
+  path?: string;
 }
 
 export interface HistorySnapshot {

@@ -7,9 +7,13 @@ import {
 } from '../seedData';
 import { loadPersistedState, savePersistedState, type PersistedState } from '../lib/persist';
 import {
-  diffLines, mdToHtml, outlineHtml, outlineMd, parseFront, slug, wordCount,
+  diffLines, htmlToMd, mdToHtml, outlineHtml, outlineMd, parseFront, slug, wordCount,
 } from '../lib/markdown';
 import { agoLabel, dailyTitle, download, escapeRegExp, nowStamp, openInBrowser } from '../lib/utils';
+import {
+  copyFile as tauriCopyFile, createFile as tauriCreateFile, isTauri,
+  moveFile as tauriMoveFile, pickVaultRoot as tauriPickVaultRoot, readVaultTree, writeFile,
+} from '../lib/tauriFs';
 import type { EmlData, FileType, HtmlWidth, NoteFile, ViewMode } from '../types';
 
 interface Suggest { kind: 'wiki' | 'slash'; q: string; caret: number; }
@@ -72,7 +76,7 @@ export function useNotesApp(showRightSidebar = true) {
         collapsed: state.collapsed, railHidden: state.railHidden, view: state.view, activeId: state.activeId,
         openTabs: state.openTabs, filter: state.filter, expandedDocs: state.expandedDocs, editedAt: state.editedAt,
         dynamicFiles: state.dynamicFiles, sources: state.sources, eml: state.eml, history: state.history,
-        wiki: state.wiki, autosave: state.autosave, htmlWidth: state.htmlWidth,
+        wiki: state.wiki, autosave: state.autosave, htmlWidth: state.htmlWidth, vaultRoot: state.vaultRoot,
       };
       savePersistedState(p);
     }, 250);
@@ -108,7 +112,9 @@ export function useNotesApp(showRightSidebar = true) {
   const setSource = useCallback((id: string, v: string) => {
     setState((s) => ({ sources: { ...s.sources, [id]: v } }));
     touch(id);
-  }, [setState, touch]);
+    const f = fileOfMap.get(id);
+    if (isTauri() && f?.path) writeFile(f.path, v).catch(() => {});
+  }, [fileOfMap, setState, touch]);
 
   const setEml = useCallback((id: string, key: keyof EmlData, val: string) => {
     setState((s) => ({ eml: { ...s.eml, [id]: { ...s.eml[id], [key]: val } } }));
@@ -140,6 +146,90 @@ export function useNotesApp(showRightSidebar = true) {
       openTabs: [...s.openTabs, id],
     }));
   }, [all, open, setState]);
+
+  const vaultPath = useCallback((folder: string, file: string) => {
+    const root = stateRef.current.vaultRoot;
+    return root ? root + '/' + folder + '/' + file : '';
+  }, []);
+
+  const pickVaultRoot = useCallback(async () => {
+    const dir = await tauriPickVaultRoot();
+    if (dir) setState({ vaultRoot: dir });
+  }, [setState]);
+
+  const newFile = useCallback((folder: string, parent?: string) => {
+    const n = stateRef.current.dynamicFiles.filter((f) => f.folder === folder).length + 1;
+    const title = 'Untitled ' + n;
+    const id = 'note-' + slug(title) + '-' + Date.now();
+    const file = slug(title) + '.md';
+    const body = '# ' + title + '\n\n';
+    const nf: NoteFile = { id, title, file, type: 'md', folder, pinned: false, parent };
+    if (isTauri() && stateRef.current.vaultRoot) {
+      nf.path = vaultPath(folder, file);
+      tauriCreateFile(nf.path, body).catch(() => {});
+    }
+    setState((s) => ({
+      dynamicFiles: [...s.dynamicFiles, nf],
+      sources: { ...s.sources, [id]: body },
+      activeId: id,
+      openTabs: [...s.openTabs, id],
+    }));
+  }, [setState, vaultPath]);
+
+  const duplicateFile = useCallback((srcId: string) => {
+    const src = fileOf(srcId);
+    if (!src) return;
+    const title = src.title + ' copy';
+    const id = 'note-' + slug(title) + '-' + Date.now();
+    const file = slug(title) + (src.type === 'md' ? '.md' : src.type === 'html' ? '.html' : '.eml');
+    const body = stateRef.current.sources[srcId] || '';
+    const nf: NoteFile = { id, title, file, type: src.type, folder: src.folder, parent: src.parent, pinned: false };
+    if (isTauri() && stateRef.current.vaultRoot && src.path) {
+      nf.path = vaultPath(src.folder, file);
+      tauriCopyFile(src.path, nf.path).catch(() => {});
+    }
+    setState((s) => ({
+      dynamicFiles: [...s.dynamicFiles, nf],
+      sources: { ...s.sources, [id]: body },
+      eml: src.type === 'eml' ? { ...s.eml, [id]: s.eml[srcId] } : s.eml,
+      activeId: id,
+      openTabs: [...s.openTabs, id],
+    }));
+  }, [fileOf, setState, vaultPath]);
+
+  const moveFileTo = useCallback((id: string, folder: string, parent?: string) => {
+    const f = fileOf(id);
+    if (!f || (f.folder === folder && f.parent === parent)) return;
+    let newPath: string | undefined;
+    if (isTauri() && stateRef.current.vaultRoot && f.path) {
+      newPath = vaultPath(folder, f.file);
+      tauriMoveFile(f.path, newPath).catch(() => {});
+    }
+    setState((s) => ({
+      dynamicFiles: s.dynamicFiles.map((x) => (x.id === id ? { ...x, folder, parent, path: newPath || x.path } : x)),
+    }));
+  }, [fileOf, setState, vaultPath]);
+
+  const toggleExpand = useCallback((key: string) => {
+    setState((s) => ({ expandedDocs: { ...s.expandedDocs, [key]: !s.expandedDocs[key] } }));
+  }, [setState]);
+
+  const refreshVault = useCallback(async () => {
+    const root = stateRef.current.vaultRoot;
+    if (!isTauri() || !root) return;
+    const entries = await readVaultTree(root).catch(() => []);
+    const known = new Set(stateRef.current.dynamicFiles.map((f) => f.path).filter(Boolean));
+    const added: NoteFile[] = [];
+    entries.filter((e) => !e.is_dir).forEach((e) => {
+      if (known.has(e.path)) return;
+      const rel = e.path.slice(root.length + 1);
+      const folder = rel.includes('/') ? rel.split('/')[0] : 'Notes';
+      const ext = e.name.split('.').pop() || 'md';
+      const type: FileType = ext === 'html' ? 'html' : ext === 'eml' ? 'eml' : 'md';
+      added.push({ id: 'fs-' + e.path, title: e.name.replace(/\.[^.]+$/, ''), file: e.name, type, folder, pinned: false, path: e.path });
+    });
+    if (added.length) setState((s) => ({ dynamicFiles: [...s.dynamicFiles, ...added] }));
+  }, [setState]);
 
   const toggleTask = useCallback((idx: number) => {
     const id = stateRef.current.activeId;
@@ -585,14 +675,10 @@ export function useNotesApp(showRightSidebar = true) {
     return true;
   }, [fileTags, state.filter]);
 
-  const folders = useMemo(() => folderOrder.map((name) => {
-    const list: { file: NoteFile; depth: number }[] = [];
-    all.filter((f) => f.folder === name && !f.parent && pred(f)).forEach((f) => {
-      list.push({ file: f, depth: 0 });
-      if (state.expandedDocs[f.id]) childrenOf(f.id).filter(pred).forEach((c) => list.push({ file: c, depth: 1 }));
-    });
-    return { name, files: list };
-  }).filter((g) => g.files.length), [all, childrenOf, pred, state.expandedDocs]);
+  const folders = useMemo(() => folderOrder.map((name) => ({
+    name,
+    roots: all.filter((f) => f.folder === name && !f.parent && pred(f)),
+  })).filter((g) => g.roots.length), [all, pred]);
 
   // breadcrumb
   const pathSegments = useMemo(() => {
@@ -630,6 +716,10 @@ export function useNotesApp(showRightSidebar = true) {
     onPreviewClick, onSourceInput, scrollTo,
     openInBrowser,
     agoLabel,
+    childrenOf, newFile, duplicateFile, moveFileTo, toggleExpand, pickVaultRoot, refreshVault,
+    allFolderNames: folderOrder,
+    isTauri: isTauri(),
+    htmlToMd,
   };
 }
 
