@@ -2,6 +2,17 @@ import type { CSSProperties } from 'react';
 import type { NotesAppVM } from '../hooks/useNotesApp';
 import type { ViewMode } from '../types';
 
+function isTauri(): boolean {
+  return '__TAURI_INTERNALS__' in window;
+}
+
+async function windowControl(action: 'close' | 'minimize' | 'toggleMaximize') {
+  if (!isTauri()) return;
+  const { getCurrentWindow } = await import('@tauri-apps/api/window');
+  const win = getCurrentWindow();
+  await win[action]();
+}
+
 const iconBtnStyle: CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
   width: 30, height: 28, borderRadius: 7, cursor: 'pointer', flex: 'none',
@@ -31,11 +42,11 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
   const railOn = !state.railHidden && vm.showRightSidebar && !!active;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', height: 52, background: '#faf9f7', borderBottom: '1px solid rgba(0,0,0,.08)', flex: 'none', padding: '0 16px', gap: 14 }}>
+    <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: '#faf9f7', borderBottom: '1px solid rgba(0,0,0,.08)', flex: 'none', padding: '0 16px', gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57' }} />
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e' }} />
-        <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#28c840' }} />
+        <span onClick={() => windowControl('close')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57', cursor: 'pointer' }} />
+        <span onClick={() => windowControl('minimize')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e', cursor: 'pointer' }} />
+        <span onClick={() => windowControl('toggleMaximize')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#28c840', cursor: 'pointer' }} />
       </div>
 
       <IconBtn title="Toggle sidebar (⌘\)" onClick={() => setState((s) => ({ collapsed: !s.collapsed }))}>

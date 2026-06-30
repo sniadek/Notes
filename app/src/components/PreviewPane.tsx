@@ -61,6 +61,7 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
             <iframe
               srcDoc={sourceValue}
               title="preview"
+              sandbox="allow-scripts"
               style={{ width: WIDTHS[state.htmlWidth], maxWidth: '100%', height: '100%', minHeight: 520, border: '1px solid rgba(0,0,0,.12)', borderRadius: 10, background: '#fff', boxShadow: '0 6px 24px -10px rgba(0,0,0,.2)' }}
             />
           </div>
