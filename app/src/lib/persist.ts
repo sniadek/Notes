@@ -19,6 +19,7 @@ export interface PersistedState {
   wiki: boolean;
   autosave: boolean;
   htmlWidth: HtmlWidth;
+  vaultRoot: string | null;
 }
 
 export function defaultPersistedState(): PersistedState {
@@ -38,6 +39,7 @@ export function defaultPersistedState(): PersistedState {
     wiki: true,
     autosave: true,
     htmlWidth: 'desktop',
+    vaultRoot: null,
   };
 }
 

@@ -94,6 +94,17 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
             <span style={{ font: '14px -apple-system,system-ui', color: '#403d37' }}>New note format</span>
             <span style={{ font: '13px ui-monospace,Menlo,monospace', color: '#8a8a8f', background: '#f0eee9', padding: '6px 12px', borderRadius: 8 }}>Markdown · .md ▾</span>
           </div>
+          {vm.isTauri && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid rgba(0,0,0,.05)' }}>
+              <span style={{ font: '14px -apple-system,system-ui', color: '#403d37' }}>Vault folder</span>
+              <div
+                onClick={() => vm.pickVaultRoot()}
+                style={{ font: '13px ui-monospace,Menlo,monospace', color: '#8a8a8f', background: '#f0eee9', padding: '6px 12px', borderRadius: 8, cursor: 'pointer', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >
+                {state.vaultRoot || 'Choose folder…'}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

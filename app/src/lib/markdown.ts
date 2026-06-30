@@ -141,6 +141,56 @@ export function wordCount(s: string): number {
   return s.replace(/<[^>]+>/g, ' ').replace(/[#>*`-]/g, ' ').trim().split(/\s+/).filter(Boolean).length;
 }
 
+function inlineToMd(el: Node): string {
+  let out = '';
+  el.childNodes.forEach((n) => {
+    if (n.nodeType === Node.TEXT_NODE) { out += n.textContent || ''; return; }
+    const e = n as HTMLElement;
+    const tag = e.tagName?.toLowerCase();
+    if (tag === 'strong' || tag === 'b') out += '**' + inlineToMd(e) + '**';
+    else if (tag === 'em' || tag === 'i') out += '*' + inlineToMd(e) + '*';
+    else if (tag === 'code') out += '`' + (e.textContent || '') + '`';
+    else if (tag === 'a') out += '[' + inlineToMd(e) + '](' + (e.getAttribute('href') || '') + ')';
+    else if (tag === 'br') out += '\n';
+    else if (e.hasAttribute && e.hasAttribute('data-wiki')) out += '[[' + e.getAttribute('data-wiki') + ']]';
+    else out += inlineToMd(e);
+  });
+  return out;
+}
+
+export function htmlToMd(html: string): string {
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  const lines: string[] = [];
+  root.childNodes.forEach((n) => {
+    if (n.nodeType === Node.TEXT_NODE) {
+      const t = (n.textContent || '').trim();
+      if (t) lines.push(t);
+      return;
+    }
+    const e = n as HTMLElement;
+    const tag = e.tagName?.toLowerCase();
+    if (tag === 'h1') lines.push('# ' + inlineToMd(e).trim());
+    else if (tag === 'h2') lines.push('## ' + inlineToMd(e).trim());
+    else if (tag === 'h3') lines.push('### ' + inlineToMd(e).trim());
+    else if (tag === 'blockquote') lines.push('> ' + inlineToMd(e).trim());
+    else if (tag === 'ul') {
+      e.querySelectorAll(':scope > li').forEach((li) => lines.push('- ' + inlineToMd(li).trim()));
+    } else if (tag === 'pre') {
+      const code = e.querySelector('code');
+      lines.push('```\n' + (code ? code.textContent : e.textContent) + '\n```');
+    } else if (tag === 'div' && e.hasAttribute('data-task')) {
+      const done = e.querySelector('span')?.textContent?.trim() === '✓';
+      const text = e.querySelectorAll('span')[1] ? inlineToMd(e.querySelectorAll('span')[1]).trim() : inlineToMd(e).trim();
+      lines.push('- [' + (done ? 'x' : ' ') + '] ' + text);
+    } else if (tag === 'p' || tag === 'div') {
+      const t = inlineToMd(e).trim();
+      if (t) lines.push(t);
+    }
+  });
+  return lines.join('\n\n');
+}
+
 export interface DiffRow { t: 'same' | 'add' | 'del'; v: string; }
 
 export function diffLines(a: string[], b: string[]): DiffRow[] {

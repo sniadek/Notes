@@ -1,0 +1,47 @@
+export function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+}
+
+export interface FsEntry { path: string; name: string; is_dir: boolean; }
+
+export async function pickVaultRoot(): Promise<string | null> {
+  if (!isTauri()) return null;
+  const { open } = await import('@tauri-apps/plugin-dialog');
+  const dir = await open({ directory: true, multiple: false });
+  return typeof dir === 'string' ? dir : null;
+}
+
+export async function readVaultTree(root: string): Promise<FsEntry[]> {
+  if (!isTauri()) return [];
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<FsEntry[]>('read_vault_tree', { root });
+}
+
+export async function readFile(path: string): Promise<string> {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<string>('read_file', { path });
+}
+
+export async function writeFile(path: string, contents: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('write_file', { path, contents });
+}
+
+export async function createFile(path: string, contents: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('create_file', { path, contents });
+}
+
+export async function copyFile(src: string, dest: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('copy_file', { src, dest });
+}
+
+export async function moveFile(src: string, dest: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('move_file', { src, dest });
+}
