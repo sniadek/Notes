@@ -1,0 +1,25 @@
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+body {
+  background: #eceae6;
+  font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+textarea, input { font-family: inherit; }
+.mono { font-family: ui-monospace, Menlo, monospace; }
+
+.sc::-webkit-scrollbar { width: 9px; height: 9px; }
+.sc::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, .16);
+  border-radius: 9px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.sc::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes pop { from { transform: translateY(-8px) scale(.985); } to { transform: none; } }
+@keyframes fade { from { opacity: .55; } to { opacity: 1; } }
+@keyframes rise { from { transform: translateY(8px); } to { transform: none; } }
+
+.katex { font-size: 1.05em; }
+.mmd svg { max-width: 100%; height: auto; }
