@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tauri": "tauri"
   },
   "dependencies": {
     "katex": "^0.17.0",
@@ -16,6 +17,7 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/katex": "^0.16.8",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
