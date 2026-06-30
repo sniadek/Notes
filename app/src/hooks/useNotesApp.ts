@@ -386,6 +386,24 @@ export function useNotesApp(showRightSidebar = true) {
     }
   }, [setState]);
 
+  const selectInSource = useCallback((start: number, end: number) => {
+    const el = sourceElRef.current;
+    if (!el || start < 0) return;
+    el.setSelectionRange(start, end);
+    const lineHeight = 25;
+    const line = el.value.slice(0, start).split('\n').length - 1;
+    el.scrollTop = Math.max(0, line * lineHeight - el.clientHeight / 2);
+  }, []);
+
+  const selectPreviewTextInSource = useCallback((text: string) => {
+    const t = text.trim();
+    if (!t) return;
+    const src = stateRef.current.sources[stateRef.current.activeId || ''] || '';
+    const idx = src.indexOf(t);
+    if (idx === -1) return;
+    selectInSource(idx, idx + t.length);
+  }, [selectInSource]);
+
   const scrollTo = useCallback((id: string) => {
     const c = previewElRef.current;
     if (c && id) {
@@ -713,7 +731,7 @@ export function useNotesApp(showRightSidebar = true) {
     open, closeTab, touch, setSource, setEml, aiGenerate, toggleTask, openOrCreate,
     openCapture, closeCapture, saveCapture, ensureDaily, openDaily,
     currentExportHtml, exportPrint, exportDownload, exportDoc, exportCopyHtml,
-    onPreviewClick, onSourceInput, scrollTo,
+    onPreviewClick, onSourceInput, scrollTo, selectInSource, selectPreviewTextInSource,
     openInBrowser,
     agoLabel,
     childrenOf, newFile, duplicateFile, moveFileTo, toggleExpand, pickVaultRoot, refreshVault,
