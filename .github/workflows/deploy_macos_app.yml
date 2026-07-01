@@ -1,5 +1,68 @@
-- uses: akiojin/generate-mac-installer-github-action@v0.1.0
-  with:
-    root-directory: Build
-    bundle-path: Build.app
-    identifier: com.akiojin.GitHubActionsForUnity
+name: Build macOS App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-tauri:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "app/src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: app
+
+      - name: Build Tauri app
+        run: npm run tauri build -- --target universal-apple-darwin
+        working-directory: app
+
+      - name: Upload .app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Notes-app
+          path: app/src-tauri/target/universal-apple-darwin/release/bundle/macos/Notes.app
+
+      - name: Upload .dmg installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Notes-dmg
+          path: app/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+
+      # --- Optional: also produce a signed-less .pkg installer alongside the .dmg ---
+      # Uncomment if you need a .pkg for MDM/enterprise-style distribution.
+      #
+      # - name: Generate .pkg installer
+      #   id: installer
+      #   uses: akiojin/generate-mac-installer-github-action@v0.1.0
+      #   with:
+      #     root-directory: app/src-tauri/target/universal-apple-darwin/release/bundle/macos
+      #     bundle-path: Notes.app
+      #     identifier: com.sniadek.notes
+      #     version: "0.1.0"
+      #
+      # - name: Upload .pkg artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: notes-pkg-installer
+      #     path: ${{ steps.installer.outputs.output-path }}
