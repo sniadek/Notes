@@ -11,7 +11,7 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
   const paneStyle = {
     flex: 1, minWidth: 0, overflow: 'auto',
     padding: isHtml ? '0' : '40px 44px',
-    background: isEml ? '#f3f1ec' : '#fffefb',
+    background: isEml ? '#f3f1ec' : 'var(--bg-surface)',
   } as const;
 
   if (isMd) {
@@ -43,8 +43,8 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
         onClick={() => setState({ htmlWidth: key })}
         style={{
           padding: '4px 11px', borderRadius: 6, cursor: 'pointer', font: '500 11.5px -apple-system,system-ui',
-          color: state.htmlWidth === key ? '#26241f' : '#8a8a8f',
-          background: state.htmlWidth === key ? '#fffefb' : 'transparent',
+          color: state.htmlWidth === key ? 'var(--text-primary)' : 'var(--text-muted)',
+          background: state.htmlWidth === key ? 'var(--bg-surface)' : 'transparent',
           boxShadow: state.htmlWidth === key ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
         }}
       >
@@ -54,16 +54,16 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
     return (
       <div className="sc" style={paneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid rgba(0,0,0,.07)', background: '#faf9f7', flex: 'none' }}>
-            <div style={{ display: 'flex', gap: 2, background: '#f0eee9', borderRadius: 8, padding: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: '#faf9f7', flex: 'none' }}>
+            <div style={{ display: 'flex', gap: 2, background: 'var(--bg-subtle)', borderRadius: 8, padding: 2 }}>
               {devBtn('desktop', 'Desktop')}
               {devBtn('tablet', 'Tablet')}
               {devBtn('mobile', 'Mobile')}
             </div>
-            <span style={{ marginLeft: 'auto', font: '11px ui-monospace,Menlo,monospace', color: '#bdb8af' }}>{WIDTHS[state.htmlWidth]}</span>
+            <span style={{ marginLeft: 'auto', font: '11px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>{WIDTHS[state.htmlWidth]}</span>
             <span
               onClick={() => vm.openInBrowser(sourceValue)}
-              style={{ font: '500 11.5px -apple-system,system-ui', color: 'oklch(0.5 0.12 264)', cursor: 'pointer' }}
+              style={{ font: '500 11.5px -apple-system,system-ui', color: 'oklch(0.5 0.12 var(--accent-hue))', cursor: 'pointer' }}
             >
               ↗ Open in browser
             </span>
@@ -96,9 +96,9 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
   }
 
   if (isEml) {
-    const card = '<div style="max-width:660px;margin:0 auto;background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:13px;overflow:hidden;box-shadow:0 6px 24px -10px rgba(0,0,0,.18)"><div style="padding:18px 24px;background:#faf9f6;border-bottom:1px solid rgba(0,0,0,.07)"><div style="font:600 17px -apple-system,system-ui;color:#26241f;margin-bottom:10px">'
-      + esc(emlData.subject) + '</div><div style="display:flex;gap:8px;font:12px ui-monospace,Menlo,monospace;color:#8a8a8f;margin-bottom:3px"><span style="color:#bdb8af;width:42px">From</span>'
-      + esc(emlData.from) + '</div><div style="display:flex;gap:8px;font:12px ui-monospace,Menlo,monospace;color:#8a8a8f"><span style="color:#bdb8af;width:42px">To</span>'
+    const card = '<div style="max-width:660px;margin:0 auto;background:#fff;border:1px solid rgba(0,0,0,.09);border-radius:13px;overflow:hidden;box-shadow:0 6px 24px -10px rgba(0,0,0,.18)"><div style="padding:18px 24px;background:#faf9f6;border-bottom:1px solid var(--border)"><div style="font:600 17px -apple-system,system-ui;color:var(--text-primary);margin-bottom:10px">'
+      + esc(emlData.subject) + '</div><div style="display:flex;gap:8px;font:12px ui-monospace,Menlo,monospace;color:var(--text-muted);margin-bottom:3px"><span style="color:var(--text-faintest);width:42px">From</span>'
+      + esc(emlData.from) + '</div><div style="display:flex;gap:8px;font:12px ui-monospace,Menlo,monospace;color:var(--text-muted)"><span style="color:var(--text-faintest);width:42px">To</span>'
       + esc(emlData.to) + '</div></div><div style="padding:26px 28px">' + emlData.body + '</div></div>';
     return (
       <div className="sc" style={paneStyle}>

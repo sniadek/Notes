@@ -1,7 +1,11 @@
-import { eml as seedEml, history as seedHistory, seedEditedAt, sources as seedSources } from '../seedData';
+import {
+  eml as seedEml, files as seedFiles, folderOrder as seedFolderOrder, history as seedHistory, seedEditedAt, sources as seedSources,
+} from '../seedData';
 import type { EmlData, HistorySnapshot, NoteFile, ViewMode, HtmlWidth } from '../types';
 
 const STORAGE_KEY = 'notes-app:v1';
+
+export type Design = 'default' | 'cowork' | 'cowork-plus';
 
 export interface PersistedState {
   collapsed: boolean;
@@ -20,6 +24,11 @@ export interface PersistedState {
   autosave: boolean;
   htmlWidth: HtmlWidth;
   vaultRoot: string | null;
+  design: Design;
+  folderOrder: string[];
+  noteOrder: string[];
+  fileMoves: Record<string, Partial<Pick<NoteFile, 'folder' | 'parent' | 'path' | 'title' | 'file'>>>;
+  createdAt: Record<string, number>;
 }
 
 export function defaultPersistedState(): PersistedState {
@@ -40,6 +49,11 @@ export function defaultPersistedState(): PersistedState {
     autosave: true,
     htmlWidth: 'desktop',
     vaultRoot: null,
+    design: 'default',
+    folderOrder: [...seedFolderOrder],
+    noteOrder: seedFiles.map((f) => f.id),
+    fileMoves: {},
+    createdAt: {},
   };
 }
 
