@@ -183,6 +183,12 @@ export function htmlToMd(html: string): string {
       const done = e.querySelector('span')?.textContent?.trim() === '✓';
       const text = e.querySelectorAll('span')[1] ? inlineToMd(e.querySelectorAll('span')[1]).trim() : inlineToMd(e).trim();
       lines.push('- [' + (done ? 'x' : ' ') + '] ' + text);
+    } else if (tag === 'div' && e.querySelector(':scope > pre')) {
+      const pre = e.querySelector(':scope > pre') as HTMLElement;
+      const code = pre.querySelector('code');
+      lines.push('```\n' + (code ? code.textContent : pre.textContent) + '\n```');
+    } else if (tag === 'div' && e.classList.contains('mmd')) {
+      // mermaid blocks render as a placeholder div with no source text in the DOM; skip
     } else if (tag === 'p' || tag === 'div') {
       const t = inlineToMd(e).trim();
       if (t) lines.push(t);
