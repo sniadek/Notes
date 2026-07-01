@@ -23,14 +23,14 @@ export default function ShortcutsModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 51, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: '92vw', background: '#fffefb', borderRadius: 14, boxShadow: '0 30px 80px -16px rgba(0,0,0,.45)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid rgba(0,0,0,.07)' }}>
-          <div style={{ font: '600 15px -apple-system,system-ui', color: '#26241f' }}>Keyboard shortcuts</div>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ font: '600 15px -apple-system,system-ui', color: 'var(--text-primary)' }}>Keyboard shortcuts</div>
           <span
             onClick={close}
             onMouseEnter={() => setCloseHover(true)}
             onMouseLeave={() => setCloseHover(false)}
-            style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 7, color: '#8a8a8f', fontSize: 16, cursor: 'pointer', background: closeHover ? '#f0eee9' : 'transparent' }}
+            style={{ width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 7, color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer', background: closeHover ? 'var(--bg-subtle)' : 'transparent' }}
           >
             ×
           </span>
@@ -38,8 +38,8 @@ export default function ShortcutsModal({ vm }: { vm: NotesAppVM }) {
         <div style={{ padding: '8px 20px 18px' }}>
           {SHORTCUTS.map((k) => (
             <div key={k.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(0,0,0,.04)' }}>
-              <span style={{ font: '13.5px -apple-system,system-ui', color: '#403d37' }}>{k.label}</span>
-              <span style={{ font: '600 11px ui-monospace,Menlo,monospace', color: '#8a8a8f', background: '#f0eee9', padding: '3px 8px', borderRadius: 6 }}>{k.keys}</span>
+              <span style={{ font: '13.5px -apple-system,system-ui', color: 'var(--text-secondary)' }}>{k.label}</span>
+              <span style={{ font: '600 11px ui-monospace,Menlo,monospace', color: 'var(--text-muted)', background: 'var(--bg-subtle)', padding: '3px 8px', borderRadius: 6 }}>{k.keys}</span>
             </div>
           ))}
         </div>

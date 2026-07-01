@@ -19,15 +19,16 @@ import SettingsModal from './components/SettingsModal';
 export default function App() {
   const vm = useNotesApp(true);
   const railVisible = !vm.state.railHidden && vm.showRightSidebar && !!vm.active;
+  const cowork = vm.state.design === 'cowork' || vm.state.design === 'cowork-plus';
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#fffefb', color: '#26241f' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
       <Toolbar vm={vm} />
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Sidebar vm={vm} />
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: '#fffefb', position: 'relative' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--bg-surface)', position: 'relative' }}>
           <TabBar vm={vm} />
 
           {vm.active
@@ -42,12 +43,23 @@ export default function App() {
               </>
             )
             : (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: '#bdb8af' }}>
-                <div style={{ fontSize: 34 }}>⌘</div>
-                <div style={{ font: '400 14px -apple-system,system-ui' }}>No note open</div>
+              <div
+                style={{
+                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: 'var(--text-faintest)',
+                  ...(cowork ? { backgroundImage: 'var(--dot-grid)', backgroundSize: '22px 22px' } : {}),
+                }}
+              >
+                <div style={{ fontSize: 34, color: cowork ? 'var(--accent)' : undefined }}>⌘</div>
+                <div style={{ font: cowork ? '400 22px var(--font-serif)' : '400 14px -apple-system,system-ui', color: cowork ? 'var(--text-primary)' : undefined }}>No note open</div>
                 <div
                   onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
-                  style={{ font: '500 12.5px -apple-system,system-ui', color: 'oklch(0.5 0.12 264)', cursor: 'pointer' }}
+                  style={cowork
+                    ? {
+                        font: '500 12.5px -apple-system,system-ui', color: 'var(--text-secondary)', cursor: 'pointer',
+                        background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-pill)',
+                        padding: '10px 22px', boxShadow: 'var(--shadow-modal)',
+                      }
+                    : { font: '500 12.5px -apple-system,system-ui', color: 'var(--accent)', cursor: 'pointer' }}
                 >
                   Press ⌘K to open a file
                 </div>

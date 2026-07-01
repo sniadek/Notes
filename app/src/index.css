@@ -1,8 +1,59 @@
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
+
+html, html[data-design="default"] {
+  --bg-app: #eceae6;
+  --bg-surface: #fffefb;
+  --bg-subtle: #f0eee9;
+  --text-primary: #26241f;
+  --text-secondary: #403d37;
+  --text-muted: #8a8a8f;
+  --text-tertiary: #a8a29a;
+  --text-faint: #b5b0a6;
+  --text-faintest: #bdb8af;
+  --border: rgba(0, 0, 0, .07);
+  --border-soft: rgba(0, 0, 0, .05);
+  --accent-hue: 264;
+  --accent: oklch(0.5 0.12 var(--accent-hue));
+  --accent-soft: oklch(0.95 0.025 var(--accent-hue));
+  --accent-strong: oklch(0.45 0.11 var(--accent-hue));
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+  --shadow-modal: 0 30px 80px -16px rgba(0, 0, 0, .45);
+  --font-ui: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-mono: ui-monospace, Menlo, monospace;
+  --font-serif: var(--font-ui);
+}
+
+html[data-design="cowork"], html[data-design="cowork-plus"] {
+  --bg-app: #f7f4ef;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f0eae2;
+  --text-primary: #2d2a26;
+  --text-secondary: #3d3929;
+  --text-muted: #8e8c87;
+  --text-tertiary: #8e8c87;
+  --text-faint: #a8a29a;
+  --text-faintest: #c2bcb2;
+  --border: rgba(61, 41, 20, .1);
+  --border-soft: rgba(61, 41, 20, .06);
+  --accent-hue: 38;
+  --accent-soft: var(--bg-subtle);
+  --accent-strong: var(--text-primary);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+  --shadow-modal: 0 30px 90px -20px rgba(61, 41, 20, .28);
+  --font-serif: "Source Serif 4", Georgia, serif;
+  --dot-grid: radial-gradient(circle, rgba(61, 41, 20, .1) 1px, transparent 1px);
+}
+
 body {
-  background: #eceae6;
-  font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  background: var(--bg-app);
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 textarea, input { font-family: inherit; }
