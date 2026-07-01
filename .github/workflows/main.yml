@@ -1,0 +1,2 @@
+name: Generate macOS Installer
+uses: akiojin/generate-mac-installer-github-action@v1.0.4
