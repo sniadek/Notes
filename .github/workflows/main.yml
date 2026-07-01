@@ -1,2 +1,5 @@
-name: Generate macOS Installer
-uses: akiojin/generate-mac-installer-github-action@v1.0.4
+- uses: akiojin/generate-mac-installer-github-action@v0.1.0
+  with:
+    root-directory: Build
+    bundle-path: Build.app
+    identifier: com.akiojin.GitHubActionsForUnity
