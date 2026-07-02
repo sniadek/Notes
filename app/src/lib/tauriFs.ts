@@ -45,3 +45,15 @@ export async function moveFile(src: string, dest: string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('move_file', { src, dest });
 }
+
+export async function deleteFile(path: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('delete_file', { path });
+}
+
+export async function revealInFinder(path: string): Promise<void> {
+  if (!isTauri()) return;
+  const { revealItemInDir } = await import('@tauri-apps/plugin-opener');
+  await revealItemInDir(path);
+}

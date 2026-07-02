@@ -99,12 +99,13 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
 
       <div
         onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
-        style={{ flex: 1, maxWidth: 440, height: 30, borderRadius: 8, background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 9, color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'text' }}
+        style={{ flex: 1, minWidth: 0, maxWidth: 440, height: 30, borderRadius: 8, background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 9, color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'text', overflow: 'hidden' }}
         onMouseEnter={(e) => { e.currentTarget.style.background = '#ebe8e1'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; }}
       >
-        <span style={{ fontSize: 13 }}>⌕</span>Go to file or command
-        <span style={{ marginLeft: 'auto', font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: 5 }}>⌘K</span>
+        <span style={{ fontSize: 13, flex: 'none' }}>⌕</span>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Go to file or command</span>
+        <span style={{ marginLeft: 'auto', flex: 'none', font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: 5 }}>⌘K</span>
       </div>
 
       <WorldClock />
@@ -126,7 +127,7 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
             </span>
           ))}
         </div>
-        <IconBtn title="Quick capture (⌘⇧N)" onClick={vm.openCapture} style={{ fontSize: 15 }}>✎</IconBtn>
+        <IconBtn title="Add task (⌘⇧N)" onClick={vm.openAddTask} style={{ fontSize: 15 }}>☑</IconBtn>
         <IconBtn title="Graph view (⌘G)" onClick={() => setState({ graphOpen: true })}>⬡</IconBtn>
         <IconBtn
           title="Toggle right sidebar (⌘⇧\)"

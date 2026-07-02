@@ -32,11 +32,28 @@ export interface Backlink {
 export type ViewMode = 'edit' | 'split' | 'preview';
 export type HtmlWidth = 'desktop' | 'tablet' | 'mobile';
 
+export type FilterField = 'type' | 'tag' | 'folder' | 'pinned' | 'text' | 'filename' | 'createdAfter' | 'createdBefore';
+
+export interface FilterRule {
+  field: FilterField;
+  value: string;
+}
+
+export interface CustomFilter {
+  id: string;
+  label: string;
+  color: string;
+  match: 'all' | 'any';
+  rules: FilterRule[];
+}
+
 export interface AppState {
   collapsed: boolean;
   railHidden: boolean;
   view: ViewMode;
   activeId: string | null;
+  secondaryId: string | null;
+  secondaryView: ViewMode;
   openTabs: string[];
   filter: string;
   expandedDocs: Record<string, boolean>;
@@ -51,8 +68,10 @@ export interface AppState {
   design: 'default' | 'cowork' | 'cowork-plus';
   folderOrder: string[];
   noteOrder: string[];
-  fileMoves: Record<string, Partial<Pick<NoteFile, 'folder' | 'parent' | 'path' | 'title' | 'file'>>>;
+  fileMoves: Record<string, Partial<Pick<NoteFile, 'folder' | 'parent' | 'path' | 'title' | 'file' | 'pinned'>>>;
   createdAt: Record<string, number>;
+  customFilters: CustomFilter[];
+  pinnedFolders: string[];
 }
 
 export interface DiffRow {
@@ -64,4 +83,18 @@ export interface OutlineItem {
   level: number;
   text: string;
   id: string;
+}
+
+export type TaskPriority = 'low' | 'medium' | 'high';
+
+export interface ParsedTask {
+  id: string;
+  fileId: string;
+  fileTitle: string;
+  folder: string;
+  line: number;
+  done: boolean;
+  text: string;
+  due?: string;
+  priority?: TaskPriority;
 }

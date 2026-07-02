@@ -107,6 +107,35 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
     } else if (/^[-*]\s/.test(line)) {
       if (!inList) { html += '<ul style="font:400 15.5px/1.85 -apple-system,system-ui;color:#403d37;margin:0 0 16px;padding-left:22px">'; inList = true; }
       html += '<li style="margin-bottom:4px">' + inline(line.slice(2), wiki) + '</li>';
+    } else if (
+      /^\|.*\|\s*$/.test(line.trim()) &&
+      i + 1 < lines.length &&
+      /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1].trim())
+    ) {
+      close();
+      const parseRow = (l: string) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+      const headerCells = parseRow(line);
+      const aligns = parseRow(lines[i + 1]).map((a) => {
+        const left = a.startsWith(':');
+        const right = a.endsWith(':');
+        if (left && right) return 'center';
+        if (right) return 'right';
+        return 'left';
+      });
+      i += 2;
+      const bodyRows: string[][] = [];
+      while (i < lines.length && /^\|.*\|\s*$/.test(lines[i].trim())) {
+        bodyRows.push(parseRow(lines[i]));
+        i++;
+      }
+      i--;
+      const cellStyle = (align: string, head: boolean) =>
+        'text-align:' + align + ';padding:8px 12px;border:1px solid rgba(0,0,0,.1);' +
+        (head ? 'background:#f5f2ea;font-weight:600;color:#26241f' : 'color:#403d37');
+      html += '<table style="border-collapse:collapse;width:100%;margin:0 0 18px;font:400 14.5px/1.6 -apple-system,system-ui">' +
+        '<thead><tr>' + headerCells.map((c, ci) => '<th style="' + cellStyle(aligns[ci] || 'left', true) + '">' + inline(c, wiki) + '</th>').join('') + '</tr></thead>' +
+        '<tbody>' + bodyRows.map((row) => '<tr>' + row.map((c, ci) => '<td style="' + cellStyle(aligns[ci] || 'left', false) + '">' + inline(c, wiki) + '</td>').join('') + '</tr>').join('') + '</tbody>' +
+        '</table>';
     } else if (line.trim() === '') {
       close();
     } else {
@@ -116,6 +145,24 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
   }
   close();
   return { html, codeBlocks, mermaidBlocks };
+}
+
+export function parseEml(raw: string): { from: string; to: string; subject: string; body: string } {
+  const blankAt = raw.indexOf('\n\n');
+  const header = blankAt === -1 ? '' : raw.slice(0, blankAt);
+  const body = blankAt === -1 ? raw : raw.slice(blankAt + 2);
+  let from = '';
+  let to = '';
+  let subject = '';
+  header.split('\n').forEach((l) => {
+    const m = /^(From|To|Subject):\s*(.*)$/i.exec(l);
+    if (!m) return;
+    const key = m[1].toLowerCase();
+    if (key === 'from') from = m[2].trim();
+    else if (key === 'to') to = m[2].trim();
+    else if (key === 'subject') subject = m[2].trim();
+  });
+  return { from, to, subject, body };
 }
 
 export interface Outline { level: number; text: string; id: string; }
@@ -189,6 +236,17 @@ export function htmlToMd(html: string): string {
       lines.push('```\n' + (code ? code.textContent : pre.textContent) + '\n```');
     } else if (tag === 'div' && e.classList.contains('mmd')) {
       // mermaid blocks render as a placeholder div with no source text in the DOM; skip
+    } else if (tag === 'table') {
+      const headerCells = Array.from(e.querySelectorAll('thead th')).map((th) => inlineToMd(th).trim());
+      const rows = Array.from(e.querySelectorAll('tbody tr')).map((tr) =>
+        Array.from(tr.querySelectorAll('td')).map((td) => inlineToMd(td).trim())
+      );
+      const tableLines = [
+        '| ' + headerCells.join(' | ') + ' |',
+        '| ' + headerCells.map(() => '---').join(' | ') + ' |',
+        ...rows.map((r) => '| ' + r.join(' | ') + ' |'),
+      ];
+      lines.push(tableLines.join('\n'));
     } else if (tag === 'p' || tag === 'div') {
       const t = inlineToMd(e).trim();
       if (t) lines.push(t);
