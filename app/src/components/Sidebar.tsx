@@ -43,7 +43,7 @@ const chevronStyle: CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
 };
 
-const menuItemStyle: CSSProperties = { padding: '7px 11px', fontSize: 12, color: '#4a4a4c', cursor: 'pointer' };
+const menuItemStyle: CSSProperties = { padding: '7px 11px', fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' };
 
 // Closes an open dropdown/menu on any click outside its container, since none of these
 // "⋯" menus close themselves otherwise — only re-toggling the trigger did.
@@ -88,7 +88,7 @@ function RecentRow({ vm, file, cowork, timestamp }: { vm: NotesAppVM; file: Note
       onClick={() => vm.open(file.id)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 12.5, cursor: 'pointer',
-        ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: '#6e6e73' }),
+        ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-muted)' }),
       }}
     >
       <Bullet cowork={cowork} bc={bc} type={file.type} />
@@ -149,7 +149,7 @@ function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, setDrag
         style={{
           display: 'flex', alignItems: 'center', gap: 7, padding: cowork ? `7px 11px 7px ${30 + depth * 16}px` : `5px 11px 5px ${30 + depth * 16}px`,
           borderRadius: 8, fontSize: cowork ? 14.5 : 12.5, cursor: 'pointer',
-          ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: '#6e6e73' }),
+          ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-muted)' }),
           ...(isOver && dragZone === 'inside' ? { outline: '1.5px dashed var(--accent)' } : {}),
           ...(isOver && dragZone === 'before' ? { boxShadow: 'inset 0 2px 0 var(--accent)' } : {}),
           ...(isOver && dragZone === 'after' ? { boxShadow: 'inset 0 -2px 0 var(--accent)' } : {}),
@@ -200,7 +200,7 @@ function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, setDrag
         </span>
       </div>
       {menuOpen && (
-        <div style={{ margin: `2px 11px 4px ${30 + depth * 16}px`, background: 'var(--bg-surface)', border: '1px solid rgba(0,0,0,.08)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 160 }}>
+        <div style={{ margin: `2px 11px 4px ${30 + depth * 16}px`, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 160 }}>
           {[
             { label: 'Rename', run: () => { setRenameValue(file.title); setRenaming(true); } },
             { label: 'Duplicate', run: () => vm.duplicateFile(file.id) },
@@ -213,7 +213,7 @@ function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, setDrag
               key={item.label}
               onClick={(e) => { e.stopPropagation(); item.run(); setMenuOpen(false); }}
               style={menuItemStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f1ec'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
               {item.label}
@@ -222,8 +222,8 @@ function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, setDrag
           {isDynamic && (
             <div
               onClick={(e) => { e.stopPropagation(); vm.deleteFile(file.id); setMenuOpen(false); }}
-              style={{ ...menuItemStyle, color: '#c0524a', borderTop: '1px solid rgba(0,0,0,.06)' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f1ec'; }}
+              style={{ ...menuItemStyle, color: '#c0524a', borderTop: '1px solid var(--border)' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
               Delete
@@ -287,7 +287,7 @@ function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverI
         }}
         onClick={() => vm.toggleExpand(folderKey)}
         style={{
-          display: 'flex', alignItems: 'center', gap: 7, padding: cowork ? `7px 11px 7px ${indent}px` : `5px 11px 5px ${indent}px`, fontSize: cowork ? 14.5 : 12.5, color: '#4a4a4c', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 7, padding: cowork ? `7px 11px 7px ${indent}px` : `5px 11px 5px ${indent}px`, fontSize: cowork ? 14.5 : 12.5, color: 'var(--text-secondary)', cursor: 'pointer',
           ...(dragOverId === folderKey ? { outline: '1.5px dashed var(--accent)', borderRadius: 6 } : {}),
           ...(fOver === 'inside' ? { outline: '1.5px dashed var(--accent)', borderRadius: 6 } : {}),
           ...(fOver === 'before' ? { boxShadow: 'inset 0 2px 0 var(--accent)' } : {}),
@@ -309,7 +309,7 @@ function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverI
         </span>
       </div>
       {menuOpen && (
-        <div style={{ margin: `2px 11px 4px ${indent}px`, background: 'var(--bg-surface)', border: '1px solid rgba(0,0,0,.08)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 160 }}>
+        <div style={{ margin: `2px 11px 4px ${indent}px`, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 160 }}>
           {[
             { label: 'New file', run: () => vm.newFile(node.path) },
             { label: 'New subfolder', run: () => { const name = window.prompt('Subfolder name:'); if (name) vm.createFolder(name, node.path); } },
@@ -320,7 +320,7 @@ function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverI
               key={item.label}
               onClick={(e) => { e.stopPropagation(); item.run(); setMenuOpen(false); }}
               style={menuItemStyle}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f1ec'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
               {item.label}
@@ -353,7 +353,7 @@ function PinnedFolderRow({ vm, path, cowork }: { vm: NotesAppVM; path: string; c
     <div
       onClick={() => vm.toggleExpand('folder:' + path)}
       style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 12.5, cursor: 'pointer', color: '#6e6e73',
+        display: 'flex', alignItems: 'center', gap: 8, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 12.5, cursor: 'pointer', color: 'var(--text-muted)',
       }}
     >
       <svg width="13" height="13" viewBox="0 0 16 16" style={{ flex: 'none' }}>
@@ -383,7 +383,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
 
   if (state.collapsed) {
     return (
-      <div style={{ width: 52, background: '#f7f5f1', borderRight: '1px solid rgba(0,0,0,.06)', flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: 4 }}>
+      <div style={{ width: 52, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: 4 }}>
         <div
           onClick={vm.openTaskManager}
           title="Tasks"
@@ -416,7 +416,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
   }
 
   return (
-    <div className="sc" style={{ width: 248, background: '#f7f5f1', borderRight: '1px solid rgba(0,0,0,.06)', overflow: 'auto', flex: 'none', padding: '14px 10px' }}>
+    <div className="sc" style={{ width: 248, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', overflow: 'auto', flex: 'none', padding: '14px 10px' }}>
       {cowork && (
         <div
           onClick={() => vm.newFile('Notes')}
@@ -437,7 +437,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
         style={{
           display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
           padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
-          ...(state.activeId === TASK_MANAGER_ID ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: '#4a4a4c' }),
+          ...(state.activeId === TASK_MANAGER_ID ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
         }}
       >
         <span style={{ width: 8, flex: 'none', fontSize: 12, display: 'flex', justifyContent: 'center' }}>☑</span>
@@ -467,7 +467,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
               onClick={() => setState({ filter: f.key })}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
-                ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: '#4a4a4c' }),
+                ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
               }}
             >
               {f.star
@@ -490,7 +490,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
               onClick={() => setState({ filter: key })}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer', position: 'relative',
-                ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: '#4a4a4c' }),
+                ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
               }}
             >
               <span style={{ width: 8, height: 8, borderRadius: 2, flex: 'none', background: cf.color, display: 'block' }} />
@@ -504,11 +504,11 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
                 ⋯
               </span>
               {filterMenuOpenId === cf.id && (
-                <div style={{ position: 'absolute', top: '100%', right: 8, marginTop: 2, background: 'var(--bg-surface)', border: '1px solid rgba(0,0,0,.08)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 120, zIndex: 5 }}>
+                <div style={{ position: 'absolute', top: '100%', right: 8, marginTop: 2, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 120, zIndex: 5 }}>
                   <div
                     onClick={(e) => { e.stopPropagation(); vm.openSmartFilterCreator(cf.id); setFilterMenuOpenId(null); }}
                     style={menuItemStyle}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f1ec'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   >
                     Edit
@@ -516,7 +516,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
                   <div
                     onClick={(e) => { e.stopPropagation(); vm.deleteCustomFilter(cf.id); setFilterMenuOpenId(null); }}
                     style={menuItemStyle}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f1ec'; }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                   >
                     Delete
@@ -631,7 +631,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
                 onClick={() => setState({ filter: 'tag:' + t })}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 4, font: cowork ? '500 12.5px -apple-system,system-ui' : '500 11px -apple-system,system-ui', padding: cowork ? '4px 10px' : '3px 9px', borderRadius: 11, cursor: 'pointer',
-                  ...(on ? { background: 'var(--accent-soft)', color: 'var(--accent-strong)' } : { background: '#ece9e2', color: '#6e6e73' }),
+                  ...(on ? { background: 'var(--accent-soft)', color: 'var(--accent-strong)' } : { background: 'var(--bg-subtle)', color: 'var(--text-muted)' }),
                 }}
               >
                 #{t}<span style={{ opacity: 0.6 }}>{tagCount[t]}</span>

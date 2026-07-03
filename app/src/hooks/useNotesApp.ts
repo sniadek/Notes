@@ -40,6 +40,9 @@ interface EphemeralState {
   findRegex: boolean;
   historyOpen: boolean;
   historyPick: number;
+  // Which file the History modal is inspecting. null ⇒ the active (primary) file; the
+  // secondary breadcrumb sets this to the split pane's file so its History opens correctly.
+  historyTargetId: string | null;
   graphOpen: boolean;
   addTaskOpen: boolean;
   addTaskText: string;
@@ -48,6 +51,9 @@ interface EphemeralState {
   addTaskTargetId: string | null;
   shortcutsOpen: boolean;
   exportOpen: boolean;
+  // Separate flag for the split pane's breadcrumb export menu, so opening one column's
+  // Export menu doesn't also pop the other column's.
+  exportOpenSecondary: boolean;
   suggest: Suggest | null;
   smartFilterModalOpen: boolean;
   editingFilterId: string | null;
@@ -59,11 +65,12 @@ function ephemeralDefaults(): EphemeralState {
     paletteOpen: false, paletteQuery: '', paletteIdx: 0,
     settingsOpen: false,
     findOpen: false, findQuery: '', replaceQuery: '', findRegex: false,
-    historyOpen: false, historyPick: 0,
+    historyOpen: false, historyPick: 0, historyTargetId: null,
     graphOpen: false,
     addTaskOpen: false, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
     shortcutsOpen: false,
     exportOpen: false,
+    exportOpenSecondary: false,
     suggest: null,
     smartFilterModalOpen: false,
     editingFilterId: null,
@@ -677,8 +684,10 @@ export function useNotesApp(showRightSidebar = true) {
   // ---- bodyOf / export ----
   const bodyOf = useCallback((f: NoteFile): string => (f.type === 'eml' ? (stateRef.current.eml[f.id] || {} as EmlData).body || '' : stateRef.current.sources[f.id] || ''), []);
 
-  const currentExportHtml = useCallback((): string => {
-    const a = fileOf(stateRef.current.activeId);
+  // All export helpers accept an optional target id (defaulting to the active/primary file),
+  // so the split pane's breadcrumb can export the secondary file without changing existing callers.
+  const currentExportHtml = useCallback((targetId?: string | null): string => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     if (!a) return '';
     if (a.type === 'md') {
       const fr = parseFront(stateRef.current.sources[a.id] || '');
@@ -689,17 +698,17 @@ export function useNotesApp(showRightSidebar = true) {
     return d.body || '';
   }, [fileOf]);
 
-  const exportPrint = useCallback(() => {
-    const a = fileOf(stateRef.current.activeId);
+  const exportPrint = useCallback((targetId?: string | null) => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write('<!doctype html><meta charset="utf-8"><title>' + (a ? a.title : '') + '</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:var(--text-primary)">' + currentExportHtml() + '</body>');
+    w.document.write('<!doctype html><meta charset="utf-8"><title>' + (a ? a.title : '') + '</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:var(--text-primary)">' + currentExportHtml(a?.id) + '</body>');
     w.document.close();
     setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 350);
   }, [currentExportHtml, fileOf]);
 
-  const exportDownload = useCallback(() => {
-    const a = fileOf(stateRef.current.activeId);
+  const exportDownload = useCallback((targetId?: string | null) => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     if (!a) return;
     if (a.type === 'eml') {
       const d = stateRef.current.eml[a.id] || ({} as EmlData);
@@ -710,15 +719,15 @@ export function useNotesApp(showRightSidebar = true) {
     }
   }, [fileOf]);
 
-  const exportDoc = useCallback(() => {
-    const a = fileOf(stateRef.current.activeId);
+  const exportDoc = useCallback((targetId?: string | null) => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     if (!a) return;
-    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>' + currentExportHtml() + '</body></html>';
+    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>' + currentExportHtml(a.id) + '</body></html>';
     download((a.title || 'document') + '.doc', html, 'application/msword');
   }, [currentExportHtml, fileOf]);
 
-  const exportCopyHtml = useCallback(() => {
-    if (navigator.clipboard) navigator.clipboard.writeText(currentExportHtml());
+  const exportCopyHtml = useCallback((targetId?: string | null) => {
+    if (navigator.clipboard) navigator.clipboard.writeText(currentExportHtml(targetId));
   }, [currentExportHtml]);
 
   // ---- preview click delegation (copy / task / wiki) ----
@@ -833,7 +842,7 @@ export function useNotesApp(showRightSidebar = true) {
       else if (meta && /^[1-9]$/.test(e.key)) { const i = +e.key - 1; if (s.openTabs[i]) { e.preventDefault(); setState({ activeId: s.openTabs[i] }); } }
       else if (meta && e.shiftKey && e.key === '|') { e.preventDefault(); setState((s2) => ({ railHidden: !s2.railHidden })); }
       else if (meta && e.key === '\\') { e.preventDefault(); setState((s2) => ({ collapsed: !s2.collapsed })); }
-      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, graphOpen: false, addTaskOpen: false, shortcutsOpen: false, exportOpen: false, suggest: null, smartFilterModalOpen: false }); }
+      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, historyTargetId: null, graphOpen: false, addTaskOpen: false, shortcutsOpen: false, exportOpen: false, exportOpenSecondary: false, suggest: null, smartFilterModalOpen: false }); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -1066,10 +1075,16 @@ export function useNotesApp(showRightSidebar = true) {
   }
 
   // history
+  // canHistory drives the primary breadcrumb's History button; the modal itself keys off
+  // historyTargetId (falling back to the active file) so the split pane's breadcrumb can
+  // open history for the secondary file.
   const canHistory = !!active && (isMd || isHtml);
-  const hid = active ? active.id : null;
+  const secondaryCanHistory = !!secondaryFile && (secondaryDoc.isMd || secondaryDoc.isHtml);
+  const historyFile = fileOf(state.historyTargetId ?? state.activeId);
+  const hid = historyFile ? historyFile.id : null;
+  const canShowHistory = !!historyFile && (historyFile.type === 'md' || historyFile.type === 'html');
   const hist = (hid && state.history[hid]) || [];
-  const curText = canHistory && hid ? (state.sources[hid] || '') : '';
+  const curText = canShowHistory && hid ? (state.sources[hid] || '') : '';
   const snap = state.historyPick >= 0 ? hist[state.historyPick] : null;
   const diffRows = snap ? diffLines(snap.text.split('\n'), curText.split('\n')) : [];
   const saveSnapshot = useCallback(() => {
@@ -1428,6 +1443,27 @@ export function useNotesApp(showRightSidebar = true) {
     return segs;
   }, [active, all, fileOf]);
 
+  // breadcrumb for the split (secondary) pane — mirrors pathSegments but for secondaryFile,
+  // so the preview column can render its own breadcrumb row (matching the design handoff).
+  const secondaryPathSegments = useMemo(() => {
+    if (!secondaryFile) return [];
+    const ancestors: NoteFile[] = [];
+    let p = secondaryFile.parent;
+    while (p) { const pf = fileOf(p); if (!pf) break; ancestors.unshift(pf); p = pf.parent; }
+    const segs: { label: string; title: string; id?: string; current: boolean }[] = [];
+    const folderParts = secondaryFile.folder.split('/');
+    folderParts.forEach((part, i) => {
+      const prefixPath = folderParts.slice(0, i + 1).join('/');
+      const firstInFolder = all.find((f) => f.folder === prefixPath && !f.parent);
+      segs.push({ label: part, title: 'Folder · ' + prefixPath, id: firstInFolder?.id, current: false });
+    });
+    ancestors.forEach((a) => segs.push({ label: a.title, title: a.file, id: a.id, current: false }));
+    segs.push({ label: secondaryFile.file, title: secondaryFile.file, current: true });
+    return segs;
+  }, [secondaryFile, all, fileOf]);
+
+  const secondaryActiveTags = secondaryDoc.activeTags;
+
   // secondary (split) pane — mirrors the primary doc's shape for EditorPane/PreviewPane
   const secondary = {
     id: state.secondaryId,
@@ -1438,6 +1474,8 @@ export function useNotesApp(showRightSidebar = true) {
     sourceValue: secondaryDoc.sourceValue,
     mdHtml: secondaryDoc.mdHtml,
     emlData: secondaryDoc.emlData,
+    words: secondaryDoc.words,
+    backlinks: (secondaryFile && backlinkMap[secondaryFile.id]) || [],
     view: state.secondaryView,
     sourceElRef: sourceElRef2,
     previewElRef: previewElRef2,
@@ -1458,8 +1496,9 @@ export function useNotesApp(showRightSidebar = true) {
     backlinks, backlinkCount: backlinks.length, unlinked, graph, paletteResults, runPaletteResult,
     findCount, replaceAllFn, findNextFn,
     suggestItems, suggestTitle, pickSuggest,
-    canHistory, historyList: hist, snap, diffRows, saveSnapshot, restore,
+    canHistory, historyFile, historyList: hist, snap, diffRows, saveSnapshot, restore,
     recentDocs, recentlyCreated, tagCount, folderTree, pathSegments,
+    secondaryPathSegments, secondaryActiveTags, secondaryCanHistory,
     pinnedFiles, pinnedFolderPaths,
     accent: ACCENT, accentSoft: ACCENT_SOFT,
     showRightSidebar,

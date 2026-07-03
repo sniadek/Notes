@@ -67,7 +67,7 @@ export interface AppState {
   wiki: boolean;
   autosave: boolean;
   htmlWidth: HtmlWidth;
-  design: 'default' | 'cowork' | 'cowork-plus';
+  design: 'default' | 'cowork' | 'cowork-plus' | 'midnight';
   folderOrder: string[];
   noteOrder: string[];
   fileMoves: Record<string, Partial<Pick<NoteFile, 'folder' | 'parent' | 'path' | 'title' | 'file' | 'pinned'>>>;

@@ -23,7 +23,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
   const paneStyle = {
     flex: 1, minWidth: 0, overflow: 'auto',
     padding: isHtml ? '0' : '40px 44px',
-    background: isEml ? '#f3f1ec' : 'var(--bg-surface)',
+    background: isEml ? 'var(--bg-canvas)' : 'var(--bg-surface)',
   } as const;
 
   if (isMd) {
@@ -69,7 +69,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
     return (
       <div className="sc" style={paneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: '#faf9f7', flex: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg-bar)', flex: 'none' }}>
             <div style={{ display: 'flex', gap: 2, background: 'var(--bg-subtle)', borderRadius: 8, padding: 2 }}>
               {devBtn('desktop', 'Desktop')}
               {devBtn('tablet', 'Tablet')}
@@ -83,7 +83,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
               ↗ Open in browser
             </span>
           </div>
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'auto', padding: 16, background: '#ece9e2', minHeight: 0 }}>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'auto', padding: 16, background: 'var(--bg-canvas)', minHeight: 0 }}>
             <iframe
               key={file?.id}
               ref={htmlFrameRef}

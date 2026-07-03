@@ -65,7 +65,7 @@ function IconBtn({ title, onClick, children, style }: { title: string; onClick: 
       onClick={onClick}
       title={title}
       style={{ ...iconBtnStyle, color: 'var(--text-muted)', fontSize: 16, ...style }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = '#efece6'; }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = style?.background as string || 'transparent'; }}
     >
       {children}
@@ -83,7 +83,7 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
   const railOn = !state.railHidden && vm.showRightSidebar && !!active;
 
   return (
-    <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: '#faf9f7', borderBottom: '1px solid rgba(0,0,0,.08)', flex: 'none', padding: '0 16px', gap: 14 }}>
+    <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: 'var(--bg-bar)', borderBottom: '1px solid var(--border)', flex: 'none', padding: '0 16px', gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
         <span onClick={() => windowControl('close')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57', cursor: 'pointer' }} />
         <span onClick={() => windowControl('minimize')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e', cursor: 'pointer' }} />
@@ -100,7 +100,7 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
       <div
         onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
         style={{ flex: 1, minWidth: 0, maxWidth: 440, height: 30, borderRadius: 8, background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 9, color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'text', overflow: 'hidden' }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#ebe8e1'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; }}
       >
         <span style={{ fontSize: 13, flex: 'none' }}>⌕</span>

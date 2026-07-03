@@ -25,6 +25,7 @@ const DESIGNS: { k: Design; label: string }[] = [
   { k: 'default', label: 'Default' },
   { k: 'cowork', label: 'Cowork' },
   { k: 'cowork-plus', label: 'Cowork+' },
+  { k: 'midnight', label: 'Midnight' },
 ];
 
 function toggle(on: boolean) {
@@ -49,7 +50,7 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid var(--border)', overflow: 'hidden', animation: 'pop .14s ease' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ font: '600 16px -apple-system,system-ui', color: 'var(--text-primary)' }}>Settings</div>
           <div

@@ -1,7 +1,7 @@
 import type { NotesAppVM } from '../hooks/useNotesApp';
 
 const labelStyle = { font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.04em' } as const;
-const inputStyle = { border: '1px solid rgba(0,0,0,.12)', borderRadius: 8, padding: '9px 11px', font: '14px -apple-system,system-ui', color: 'var(--text-primary)', background: 'var(--bg-surface)', outline: 'none' } as const;
+const inputStyle = { border: '1px solid var(--border)', borderRadius: 8, padding: '9px 11px', font: '14px -apple-system,system-ui', color: 'var(--text-primary)', background: 'var(--bg-surface)', outline: 'none' } as const;
 const monoInputStyle = { ...inputStyle, font: '13px ui-monospace,Menlo,monospace', color: 'var(--text-secondary)' };
 
 export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; pane?: 'primary' | 'secondary' }) {
@@ -59,7 +59,7 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
               <textarea
                 value={emlData.body}
                 onChange={(e) => file && vm.setEml(file.id, 'body', e.target.value)}
-                style={{ border: '1px solid rgba(0,0,0,.12)', borderRadius: 8, padding: '12px 13px', font: '12.5px/1.7 ui-monospace,Menlo,monospace', color: 'var(--text-secondary)', background: 'var(--bg-surface)', outline: 'none', resize: 'none', minHeight: 280 }}
+                style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '12px 13px', font: '12.5px/1.7 ui-monospace,Menlo,monospace', color: 'var(--text-secondary)', background: 'var(--bg-surface)', outline: 'none', resize: 'none', minHeight: 280 }}
               />
             </label>
           </div>

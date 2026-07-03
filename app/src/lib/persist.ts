@@ -5,7 +5,7 @@ import type { CustomFilter, DocFontSize, DocWidth, EmlData, HistorySnapshot, Not
 
 const STORAGE_KEY = 'notes-app:v1';
 
-export type Design = 'default' | 'cowork' | 'cowork-plus';
+export type Design = 'default' | 'cowork' | 'cowork-plus' | 'midnight';
 
 export interface PersistedState {
   collapsed: boolean;

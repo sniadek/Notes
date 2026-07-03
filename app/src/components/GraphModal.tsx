@@ -25,7 +25,7 @@ export default function GraphModal({ vm }: { vm: NotesAppVM }) {
             ×
           </span>
         </div>
-        <div style={{ flex: 1, minHeight: 0, background: '#faf9f6' }}>
+        <div style={{ flex: 1, minHeight: 0, background: 'var(--bg-subtle)' }}>
           <svg viewBox="0 0 720 420" style={{ width: '100%', height: '100%' }}>
             {graph.edges.map((e, i) => (
               <line key={i} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} stroke="oklch(0.8 0.05 var(--accent-hue))" strokeWidth={1.5} />
