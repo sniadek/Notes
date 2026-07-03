@@ -298,6 +298,12 @@ export function useNotesApp(showRightSidebar = true) {
     if (f) { open(f.id); return; }
     const id = 'note-' + slug(title);
     const file = slug(title) + '.md';
+    // Two differently-punctuated titles (e.g. "Note!" and "Note?") can slug to the same
+    // filename even though the title check above didn't match — without this, creating the
+    // second one would silently overwrite the first's file on disk via tauriCreateFile below,
+    // since both compute the identical vaultPath. Match by the actual resulting identity too.
+    const existingByFile = all.find((x) => x.folder === 'Notes' && x.file === file);
+    if (existingByFile) { open(existingByFile.id); return; }
     const body = '# ' + title + '\n\n';
     const nf: NoteFile = { id, title, file, type: 'md', folder: 'Notes', pinned: false };
     if (isTauri() && stateRef.current.vaultRoot) {
