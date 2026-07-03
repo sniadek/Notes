@@ -1,8 +1,11 @@
 import { useRef } from 'react';
 import type { NotesAppVM } from '../hooks/useNotesApp';
-import type { HtmlWidth } from '../types';
+import type { DocFontSize, HtmlWidth } from '../types';
 
 const WIDTHS: Record<HtmlWidth, string> = { desktop: '100%', tablet: '768px', mobile: '390px' };
+const FONT_SCALES: Record<DocFontSize, number> = {
+  small: 0.9, medium: 1, large: 1.15, xlarge: 1.3,
+};
 
 export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; pane?: 'primary' | 'secondary' }) {
   const { state, setState } = vm;
@@ -31,7 +34,10 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
           ref={doc.previewElRef}
           contentEditable
           suppressContentEditableWarning
-          style={{ maxWidth: 640, margin: '0 auto', outline: 'none' }}
+          style={{
+            maxWidth: state.docWidth === 'full' ? 'none' : 640, margin: '0 auto', outline: 'none',
+            zoom: FONT_SCALES[state.docFontSize],
+          }}
           onClick={doc.onPreviewClick}
           onBlur={(e) => {
             if (!file) return;

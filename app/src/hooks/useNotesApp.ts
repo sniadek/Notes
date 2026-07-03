@@ -51,6 +51,7 @@ interface EphemeralState {
   suggest: Suggest | null;
   smartFilterModalOpen: boolean;
   editingFilterId: string | null;
+  lastSyncedAt: number | null;
 }
 
 function ephemeralDefaults(): EphemeralState {
@@ -66,6 +67,7 @@ function ephemeralDefaults(): EphemeralState {
     suggest: null,
     smartFilterModalOpen: false,
     editingFilterId: null,
+    lastSyncedAt: null,
   };
 }
 
@@ -73,11 +75,23 @@ type FullState = PersistedState & EphemeralState;
 
 const ACCENT = 'var(--accent)';
 const ACCENT_SOFT = 'var(--accent-soft)';
+export const VAULT_POLL_MS = 20000;
 
 let mermaidInit = false;
 
 function withoutId(order: string[], id: string): string[] {
   return order.filter((x) => x !== id);
+}
+
+// Used when reconciling two dynamicFiles entries that turned out to represent the same
+// on-disk file (see refreshVault): folds any lines unique to the entry being dropped into
+// the surviving one, instead of silently discarding whichever entry loses the merge.
+function mergeNoteContent(winner: string, loser: string): string {
+  const seen = new Set(winner.split('\n').map((l) => l.trim()).filter(Boolean));
+  const extra = loser.split('\n').filter((l) => l.trim() && !seen.has(l.trim()));
+  if (!extra.length) return winner;
+  const sep = winner && !winner.endsWith('\n') ? '\n' : '';
+  return winner + sep + extra.join('\n') + '\n';
 }
 
 function insertRelative(order: string[], id: string, targetId: string, position: 'before' | 'after'): string[] {
@@ -181,7 +195,8 @@ export function useNotesApp(showRightSidebar = true) {
         secondaryId: state.secondaryId, secondaryView: state.secondaryView,
         openTabs: state.openTabs, filter: state.filter, expandedDocs: state.expandedDocs, editedAt: state.editedAt,
         dynamicFiles: state.dynamicFiles, sources: state.sources, eml: state.eml, history: state.history,
-        wiki: state.wiki, autosave: state.autosave, htmlWidth: state.htmlWidth, vaultRoot: state.vaultRoot,
+        wiki: state.wiki, autosave: state.autosave, htmlWidth: state.htmlWidth,
+        docWidth: state.docWidth, docFontSize: state.docFontSize, vaultRoot: state.vaultRoot,
         design: state.design, folderOrder: state.folderOrder, noteOrder: state.noteOrder, fileMoves: state.fileMoves,
         createdAt: state.createdAt, customFilters: state.customFilters, pinnedFolders: state.pinnedFolders,
       };
@@ -259,29 +274,49 @@ export function useNotesApp(showRightSidebar = true) {
   }, [setState]);
 
   const openSplit = useCallback((id: string) => {
-    setState({ secondaryId: id });
+    setState((s) => ({
+      secondaryId: id,
+      // Land the split doc right next to the primary tab, so the pair shows up
+      // adjacent in the tab bar instead of the secondary doc having no tab at all.
+      openTabs: s.openTabs.includes(id)
+        ? s.openTabs
+        : (s.activeId ? insertRelative(s.openTabs, id, s.activeId, 'after') : [...s.openTabs, id]),
+    }));
   }, [setState]);
 
   const closeSplitPane = useCallback(() => {
     setState({ secondaryId: null });
   }, [setState]);
 
-  const openOrCreate = useCallback((title: string) => {
-    const f = all.find((x) => x.title.toLowerCase() === title.toLowerCase());
-    if (f) { open(f.id); return; }
-    const id = 'note-' + slug(title);
-    setState((s) => ({
-      dynamicFiles: [...s.dynamicFiles, { id, title, file: slug(title) + '.md', type: 'md' as FileType, folder: 'Notes', pinned: false }],
-      sources: { ...s.sources, [id]: '# ' + title + '\n\n' },
-      activeId: id,
-      openTabs: [...s.openTabs, id],
-    }));
-  }, [all, open, setState]);
-
   const vaultPath = useCallback((folder: string, file: string) => {
     const root = stateRef.current.vaultRoot;
     return root ? root + '/' + folder + '/' + file : '';
   }, []);
+
+  const openOrCreate = useCallback((title: string) => {
+    const f = all.find((x) => x.title.toLowerCase() === title.toLowerCase());
+    if (f) { open(f.id); return; }
+    const id = 'note-' + slug(title);
+    const file = slug(title) + '.md';
+    // Two differently-punctuated titles (e.g. "Note!" and "Note?") can slug to the same
+    // filename even though the title check above didn't match — without this, creating the
+    // second one would silently overwrite the first's file on disk via tauriCreateFile below,
+    // since both compute the identical vaultPath. Match by the actual resulting identity too.
+    const existingByFile = all.find((x) => x.folder === 'Notes' && x.file === file);
+    if (existingByFile) { open(existingByFile.id); return; }
+    const body = '# ' + title + '\n\n';
+    const nf: NoteFile = { id, title, file, type: 'md', folder: 'Notes', pinned: false };
+    if (isTauri() && stateRef.current.vaultRoot) {
+      nf.path = vaultPath('Notes', file);
+      tauriCreateFile(nf.path, body).catch(() => {});
+    }
+    setState((s) => ({
+      dynamicFiles: [...s.dynamicFiles, nf],
+      sources: { ...s.sources, [id]: body },
+      activeId: id,
+      openTabs: [...s.openTabs, id],
+    }));
+  }, [all, open, setState, vaultPath]);
 
   const newFile = useCallback((folder: string, parent?: string) => {
     const n = stateRef.current.dynamicFiles.filter((f) => f.folder === folder).length + 1;
@@ -349,8 +384,50 @@ export function useNotesApp(showRightSidebar = true) {
     const root = stateRef.current.vaultRoot;
     if (!isTauri() || !root) return;
     const entries = await readVaultTree(root).catch(() => []);
-    const known = new Set(stateRef.current.dynamicFiles.map((f) => f.path).filter(Boolean));
+
+    const moves = stateRef.current.fileMoves;
+    const effective = (f: NoteFile): NoteFile => (moves[f.id] ? { ...f, ...moves[f.id] } : f);
+    const current = stateRef.current.dynamicFiles.map(effective);
+
+    // Reconcile entries that already ended up representing the same underlying file —
+    // e.g. a note created before its path was known (so it never synced to disk), plus
+    // a separate `fs-` entry the vault scan created once it discovered that same file.
+    // The disk-backed entry wins the id, but any lines unique to the other are folded
+    // in first (mergeNoteContent), so a stray duplicate can never silently lose content.
+    const byIdentity = new Map<string, NoteFile[]>();
+    current.forEach((f) => {
+      const key = f.folder + '/' + f.file;
+      if (!byIdentity.has(key)) byIdentity.set(key, []);
+      byIdentity.get(key)!.push(f);
+    });
+    const dropIds = new Set<string>();
+    const remap = new Map<string, string>();
+    // Loser text to fold into each winner, deferred until after the disk-read step below —
+    // the winner's own on-disk content may not have been read into `sources` yet (it can be
+    // "stale" in the same sense as the self-healing check further down), so folding losers in
+    // right now would merge against an empty/incomplete base and then clobber the real content.
+    const mergeGroups = new Map<string, string[]>();
+    byIdentity.forEach((group) => {
+      if (group.length < 2) return;
+      const winner = group.find((f) => f.path) ?? group[0];
+      group.forEach((loser) => {
+        if (loser.id === winner.id) return;
+        dropIds.add(loser.id);
+        remap.set(loser.id, winner.id);
+        if (winner.type === 'md' && stateRef.current.sources[loser.id]) {
+          const losers = mergeGroups.get(winner.id) ?? [];
+          losers.push(loser.id);
+          mergeGroups.set(winner.id, losers);
+        }
+      });
+    });
+
+    const known = new Set(current.filter((f) => !dropIds.has(f.id)).map((f) => f.path).filter(Boolean));
+    const pathless = new Map<string, NoteFile>();
+    current.forEach((f) => { if (!dropIds.has(f.id) && !f.path) pathless.set(f.folder + '/' + f.file, f); });
+
     const added: NoteFile[] = [];
+    const backfills: { id: string; path: string }[] = [];
     const discoveredFolders = new Set<string>();
     entries.forEach((e) => {
       const rel = e.path.slice(root.length + 1);
@@ -366,17 +443,26 @@ export function useNotesApp(showRightSidebar = true) {
       const folder = lastSlash === -1 ? 'Notes' : rel.slice(0, lastSlash);
       const ext = e.name.split('.').pop() || 'md';
       const type: FileType = ext === 'html' ? 'html' : ext === 'eml' ? 'eml' : 'md';
-      added.push({ id: 'fs-' + e.path, title: e.name.replace(/\.[^.]+$/, ''), file: e.name, type, folder, pinned: false, path: e.path });
+      // A path-less entry with this exact folder+file already represents this file
+      // (e.g. a daily note created before it was ever synced to disk) — adopt it
+      // instead of minting a second entry for the same underlying file.
+      const match = pathless.get(folder + '/' + e.name);
+      if (match) backfills.push({ id: match.id, path: e.path });
+      else added.push({ id: 'fs-' + e.path, title: e.name.replace(/\.[^.]+$/, ''), file: e.name, type, folder, pinned: false, path: e.path });
       const parts = folder.split('/');
       for (let i = 1; i <= parts.length; i += 1) discoveredFolders.add(parts.slice(0, i).join('/'));
     });
-    // Newly-discovered files never have content yet, and any already-known vault file
-    // that's still missing its content (e.g. from before this fix, or a prior failed
-    // read) gets picked up here too — so a stale/blank note self-heals on next refresh.
-    const stale = stateRef.current.dynamicFiles.filter((f) => (
-      f.path && !added.includes(f) && (f.type === 'eml' ? !(f.id in stateRef.current.eml) : !(f.id in stateRef.current.sources))
+
+    // Newly-discovered and freshly-backfilled files never have content yet, and any
+    // already-known vault file that's still missing its content (e.g. from before this
+    // fix, or a prior failed read) gets picked up here too — so a stale/blank note
+    // self-heals on next refresh.
+    const backfillFiles = backfills.map((b) => ({ ...current.find((f) => f.id === b.id)!, path: b.path }));
+    const stale = current.filter((f) => (
+      f.path && !dropIds.has(f.id) && !backfills.some((b) => b.id === f.id)
+      && (f.type === 'eml' ? !(f.id in stateRef.current.eml) : !(f.id in stateRef.current.sources))
     ));
-    const toRead = [...added, ...stale];
+    const toRead = [...added, ...stale, ...backfillFiles];
     const newSources: Record<string, string> = {};
     const newEml: Record<string, EmlData> = {};
     if (toRead.length) {
@@ -388,21 +474,62 @@ export function useNotesApp(showRightSidebar = true) {
         else newSources[f.id] = raw;
       }));
     }
+    // Compute the merge text now that the winner's real disk content (if it was stale) has
+    // just been read into `newSources` — falling back to the pre-refresh `sources` entry only
+    // when the winner wasn't read this pass. A merge result always wins over a plain disk
+    // read for the same id (the merge is disk-content-aware and additionally protects the
+    // loser's unique lines).
+    const mergedSources: Record<string, string> = {};
+    mergeGroups.forEach((loserIds, winnerId) => {
+      let base = newSources[winnerId] ?? stateRef.current.sources[winnerId] ?? '';
+      loserIds.forEach((loserId) => {
+        const loserText = stateRef.current.sources[loserId];
+        if (loserText) base = mergeNoteContent(base, loserText);
+      });
+      mergedSources[winnerId] = base;
+    });
+    Object.assign(newSources, mergedSources);
+    if (isTauri()) {
+      Object.entries(mergedSources).forEach(([id, text]) => {
+        const f = current.find((c) => c.id === id);
+        if (f?.path) writeFile(f.path, text).catch(() => {});
+      });
+    }
 
-    if (added.length || discoveredFolders.size || Object.keys(newSources).length || Object.keys(newEml).length) {
+    const hasChanges = added.length || discoveredFolders.size || Object.keys(newSources).length
+      || Object.keys(newEml).length || backfills.length || dropIds.size;
+    if (hasChanges) {
       const now = Date.now();
       setState((s) => {
         const newFolders = Array.from(discoveredFolders).filter((f) => !s.folderOrder.includes(f));
+        const strip = <T,>(rec: Record<string, T>): Record<string, T> => (
+          Object.fromEntries(Object.entries(rec).filter(([id]) => !dropIds.has(id)))
+        );
+        const fileMoves = { ...s.fileMoves };
+        backfills.forEach((b) => { fileMoves[b.id] = { ...fileMoves[b.id], path: b.path }; });
+        dropIds.forEach((id) => { delete fileMoves[id]; });
+        const remapId = (id: string) => remap.get(id) ?? id;
         return {
-          dynamicFiles: added.length ? [...s.dynamicFiles, ...added] : s.dynamicFiles,
-          noteOrder: added.length ? [...s.noteOrder, ...added.map((f) => f.id)] : s.noteOrder,
+          dynamicFiles: (added.length || dropIds.size)
+            ? [...s.dynamicFiles.filter((f) => !dropIds.has(f.id)), ...added]
+            : s.dynamicFiles,
+          noteOrder: (added.length || dropIds.size)
+            ? [...s.noteOrder.filter((id) => !dropIds.has(id)), ...added.map((f) => f.id)]
+            : s.noteOrder,
           createdAt: added.length ? { ...s.createdAt, ...Object.fromEntries(added.map((f) => [f.id, now])) } : s.createdAt,
           folderOrder: newFolders.length ? [...s.folderOrder, ...newFolders] : s.folderOrder,
-          sources: Object.keys(newSources).length ? { ...s.sources, ...newSources } : s.sources,
-          eml: Object.keys(newEml).length ? { ...s.eml, ...newEml } : s.eml,
+          sources: Object.keys(newSources).length || dropIds.size ? strip({ ...s.sources, ...newSources }) : s.sources,
+          eml: Object.keys(newEml).length || dropIds.size ? strip({ ...s.eml, ...newEml }) : s.eml,
+          history: dropIds.size ? strip(s.history) : s.history,
+          editedAt: dropIds.size ? strip(s.editedAt) : s.editedAt,
+          fileMoves,
+          activeId: dropIds.size && s.activeId ? remapId(s.activeId) : s.activeId,
+          secondaryId: dropIds.size && s.secondaryId ? remapId(s.secondaryId) : s.secondaryId,
+          openTabs: dropIds.size ? Array.from(new Set(s.openTabs.map(remapId))) : s.openTabs,
         };
       });
     }
+    setState({ lastSyncedAt: Date.now() });
   }, [setState]);
 
   const pickVaultRoot = useCallback(async () => {
@@ -440,13 +567,15 @@ export function useNotesApp(showRightSidebar = true) {
 
   // Poll the vault folder in the background so files created externally (e.g. by an
   // automation) surface in "Recently created" without the user manually hitting refresh.
+  // Scheduled off `lastSyncedAt` (rather than a fixed setInterval from mount) so an
+  // out-of-cycle manual refresh (e.g. pickVaultRoot, the sidebar refresh button) always
+  // pushes the next tick out a full VAULT_POLL_MS from itself — keeping StatusBar's
+  // "next check in Xs" countdown accurate instead of drifting from the real schedule.
   useEffect(() => {
-    if (!isTauri()) return;
-    const id = window.setInterval(() => {
-      if (stateRef.current.vaultRoot) refreshVault();
-    }, 20000);
-    return () => window.clearInterval(id);
-  }, [refreshVault]);
+    if (!isTauri() || !state.vaultRoot) return;
+    const id = window.setTimeout(() => { refreshVault(); }, VAULT_POLL_MS);
+    return () => window.clearTimeout(id);
+  }, [refreshVault, state.vaultRoot, state.lastSyncedAt]);
 
   const toggleTask = useCallback((idx: number, forId?: string | null) => {
     const id = forId ?? stateRef.current.activeId;
@@ -460,8 +589,13 @@ export function useNotesApp(showRightSidebar = true) {
   const ensureDaily = useCallback((): string => {
     const title = dailyTitle();
     const id = 'daily-' + title;
+    const file = title + '.md';
+    // Match by identity (folder+file), not just the synthetic id — a file that already
+    // exists on disk (e.g. discovered by refreshVault under an `fs-` id) must be reused
+    // rather than getting a second, independently-drifting entry.
+    const existing = all.find((f) => f.folder === 'Daily' && f.file === file);
+    if (existing) return existing.id;
     if (!fileOf(id)) {
-      const file = title + '.md';
       const body = '---\ntags: [daily]\n---\n# ' + title + '\n\n';
       const nf: NoteFile = { id, title, file, type: 'md', folder: 'Daily', pinned: false };
       if (isTauri() && stateRef.current.vaultRoot) {
@@ -475,7 +609,7 @@ export function useNotesApp(showRightSidebar = true) {
       }));
     }
     return id;
-  }, [fileOf, setState, vaultPath]);
+  }, [all, fileOf, setState, vaultPath]);
 
   const openDaily = useCallback(() => {
     const id = ensureDaily();

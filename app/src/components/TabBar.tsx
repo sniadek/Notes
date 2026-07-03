@@ -15,21 +15,26 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
         const f = fileOf(id);
         if (!f) return null;
         const on = id === state.activeId;
+        const paired = !!state.secondaryId && (id === state.activeId || id === state.secondaryId);
         const bc = badgeColors[f.type];
         return (
           <div
             key={id}
             ref={on ? activeTabRef : undefined}
             onClick={() => setState({ activeId: id })}
+            title={paired ? 'Shown in split view' : undefined}
             style={{
               display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', flex: 'none', cursor: 'pointer', borderRight: '1px solid rgba(0,0,0,.06)',
               ...(on
                 ? cowork
                   ? { background: 'var(--bg-surface)', color: 'var(--text-primary)', fontWeight: 600 }
                   : { background: 'var(--bg-surface)', color: 'var(--text-primary)', boxShadow: 'inset 0 -2px 0 oklch(0.55 0.12 var(--accent-hue))' }
-                : { color: 'var(--text-muted)' }),
+                : paired
+                  ? { background: 'oklch(0.96 0.025 var(--accent-hue))', color: 'var(--text-secondary)' }
+                  : { color: 'var(--text-muted)' }),
             }}
           >
+            {paired && <span style={{ fontSize: 10, color: 'oklch(0.5 0.12 var(--accent-hue))' }} title="Shown in split view">⧉</span>}
             {cowork
               ? <span style={{ fontSize: 11, color: 'var(--text-faintest)' }}>○</span>
               : <span style={{ font: '600 8px ui-monospace,Menlo,monospace', padding: '1px 3px', borderRadius: 3, color: bc.c, background: bc.b }}>{f.type.toUpperCase()}</span>}

@@ -1,7 +1,7 @@
 import {
   eml as seedEml, files as seedFiles, folderOrder as seedFolderOrder, history as seedHistory, seedEditedAt, sources as seedSources,
 } from '../seedData';
-import type { CustomFilter, EmlData, HistorySnapshot, NoteFile, ViewMode, HtmlWidth } from '../types';
+import type { CustomFilter, DocFontSize, DocWidth, EmlData, HistorySnapshot, NoteFile, ViewMode, HtmlWidth } from '../types';
 
 const STORAGE_KEY = 'notes-app:v1';
 
@@ -25,6 +25,8 @@ export interface PersistedState {
   wiki: boolean;
   autosave: boolean;
   htmlWidth: HtmlWidth;
+  docWidth: DocWidth;
+  docFontSize: DocFontSize;
   vaultRoot: string | null;
   design: Design;
   folderOrder: string[];
@@ -54,6 +56,8 @@ export function defaultPersistedState(): PersistedState {
     wiki: true,
     autosave: true,
     htmlWidth: 'desktop',
+    docWidth: 'comfortable',
+    docFontSize: 'medium',
     vaultRoot: null,
     design: 'default',
     folderOrder: [...seedFolderOrder],
