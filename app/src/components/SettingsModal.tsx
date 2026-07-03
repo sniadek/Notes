@@ -1,12 +1,24 @@
 import { useState } from 'react';
 import type { NotesAppVM } from '../hooks/useNotesApp';
 import type { Design } from '../lib/persist';
-import type { ViewMode } from '../types';
+import type { DocFontSize, DocWidth, ViewMode } from '../types';
 
 const VIEWS: { k: ViewMode; label: string }[] = [
   { k: 'edit', label: 'edit' },
   { k: 'split', label: 'split' },
   { k: 'preview', label: 'preview' },
+];
+
+const DOC_WIDTHS: { k: DocWidth; label: string }[] = [
+  { k: 'comfortable', label: 'Comfortable' },
+  { k: 'full', label: 'Full width' },
+];
+
+const DOC_FONT_SIZES: { k: DocFontSize; label: string }[] = [
+  { k: 'small', label: 'S' },
+  { k: 'medium', label: 'M' },
+  { k: 'large', label: 'L' },
+  { k: 'xlarge', label: 'XL' },
 ];
 
 const DESIGNS: { k: Design; label: string }[] = [
@@ -103,6 +115,44 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
                   }}
                 >
                   {v.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border-soft)' }}>
+            <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Document width</span>
+            <div style={{ display: 'flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 2, font: '500 12px -apple-system,system-ui' }}>
+              {DOC_WIDTHS.map((w) => (
+                <span
+                  key={w.k}
+                  onClick={() => setState({ docWidth: w.k })}
+                  style={{
+                    padding: '5px 13px', borderRadius: 6, cursor: 'pointer',
+                    background: state.docWidth === w.k ? 'var(--bg-surface)' : 'transparent',
+                    color: state.docWidth === w.k ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: state.docWidth === w.k ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
+                  }}
+                >
+                  {w.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border-soft)' }}>
+            <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Document font size</span>
+            <div style={{ display: 'flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 2, font: '500 12px ui-monospace,Menlo,monospace' }}>
+              {DOC_FONT_SIZES.map((f) => (
+                <span
+                  key={f.k}
+                  onClick={() => setState({ docFontSize: f.k })}
+                  style={{
+                    padding: '5px 13px', borderRadius: 6, cursor: 'pointer',
+                    background: state.docFontSize === f.k ? 'var(--bg-surface)' : 'transparent',
+                    color: state.docFontSize === f.k ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: state.docFontSize === f.k ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
+                  }}
+                >
+                  {f.label}
                 </span>
               ))}
             </div>

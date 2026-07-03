@@ -19,6 +19,7 @@ import ShortcutsModal from './components/ShortcutsModal';
 import SettingsModal from './components/SettingsModal';
 import SmartFilterModal from './components/SmartFilterModal';
 import TaskManagerPane from './components/TaskManagerPane';
+import ResizeHandles from './components/ResizeHandles';
 import { TASK_MANAGER_ID } from './lib/tasks';
 
 const SPLIT_VIEWS: { k: ViewMode; label: string }[] = [
@@ -71,6 +72,7 @@ export default function App() {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
+      <ResizeHandles />
       <Toolbar vm={vm} />
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>

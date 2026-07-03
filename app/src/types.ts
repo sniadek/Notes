@@ -31,6 +31,8 @@ export interface Backlink {
 
 export type ViewMode = 'edit' | 'split' | 'preview';
 export type HtmlWidth = 'desktop' | 'tablet' | 'mobile';
+export type DocWidth = 'comfortable' | 'full';
+export type DocFontSize = 'small' | 'medium' | 'large' | 'xlarge';
 
 export type FilterField = 'type' | 'tag' | 'folder' | 'pinned' | 'text' | 'filename' | 'createdAfter' | 'createdBefore';
 
