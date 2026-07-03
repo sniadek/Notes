@@ -70,10 +70,16 @@ fn move_file(src: String, dest: String) -> Result<(), String> {
   fs::rename(src, dest).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn delete_file(path: String) -> Result<(), String> {
+  fs::remove_file(path).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_opener::init())
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
@@ -90,7 +96,8 @@ pub fn run() {
       write_file,
       create_file,
       copy_file,
-      move_file
+      move_file,
+      delete_file
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

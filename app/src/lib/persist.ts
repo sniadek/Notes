@@ -1,7 +1,7 @@
 import {
   eml as seedEml, files as seedFiles, folderOrder as seedFolderOrder, history as seedHistory, seedEditedAt, sources as seedSources,
 } from '../seedData';
-import type { EmlData, HistorySnapshot, NoteFile, ViewMode, HtmlWidth } from '../types';
+import type { CustomFilter, EmlData, HistorySnapshot, NoteFile, ViewMode, HtmlWidth } from '../types';
 
 const STORAGE_KEY = 'notes-app:v1';
 
@@ -12,6 +12,8 @@ export interface PersistedState {
   railHidden: boolean;
   view: ViewMode;
   activeId: string | null;
+  secondaryId: string | null;
+  secondaryView: ViewMode;
   openTabs: string[];
   filter: string;
   expandedDocs: Record<string, boolean>;
@@ -27,8 +29,10 @@ export interface PersistedState {
   design: Design;
   folderOrder: string[];
   noteOrder: string[];
-  fileMoves: Record<string, Partial<Pick<NoteFile, 'folder' | 'parent' | 'path' | 'title' | 'file'>>>;
+  fileMoves: Record<string, Partial<Pick<NoteFile, 'folder' | 'parent' | 'path' | 'title' | 'file' | 'pinned'>>>;
   createdAt: Record<string, number>;
+  customFilters: CustomFilter[];
+  pinnedFolders: string[];
 }
 
 export function defaultPersistedState(): PersistedState {
@@ -37,6 +41,8 @@ export function defaultPersistedState(): PersistedState {
     railHidden: false,
     view: 'split',
     activeId: 'api',
+    secondaryId: null,
+    secondaryView: 'preview',
     openTabs: ['api', 'landing', 'q2'],
     filter: 'all',
     expandedDocs: { api: true, roadmap: true },
@@ -54,6 +60,8 @@ export function defaultPersistedState(): PersistedState {
     noteOrder: seedFiles.map((f) => f.id),
     fileMoves: {},
     createdAt: {},
+    customFilters: [],
+    pinnedFolders: [],
   };
 }
 

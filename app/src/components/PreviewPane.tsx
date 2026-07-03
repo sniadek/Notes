@@ -4,8 +4,17 @@ import type { HtmlWidth } from '../types';
 
 const WIDTHS: Record<HtmlWidth, string> = { desktop: '100%', tablet: '768px', mobile: '390px' };
 
-export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
-  const { state, setState, isMd, isHtml, isEml, sourceValue, mdHtml, emlData } = vm;
+export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; pane?: 'primary' | 'secondary' }) {
+  const { state, setState } = vm;
+  const secondary = pane === 'secondary';
+  const doc = secondary
+    ? vm.secondary
+    : {
+        id: vm.active?.id ?? null, file: vm.active, isMd: vm.isMd, isHtml: vm.isHtml, isEml: vm.isEml,
+        sourceValue: vm.sourceValue, mdHtml: vm.mdHtml, emlData: vm.emlData,
+        previewElRef: vm.previewElRef, onPreviewClick: vm.onPreviewClick,
+      };
+  const { isMd, isHtml, isEml, sourceValue, mdHtml, emlData, file } = doc;
   const htmlFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   const paneStyle = {
@@ -18,18 +27,18 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
     return (
       <div className="sc" style={paneStyle}>
         <div
-          key={vm.active?.id}
-          ref={vm.previewElRef}
+          key={file?.id}
+          ref={doc.previewElRef}
           contentEditable
           suppressContentEditableWarning
           style={{ maxWidth: 640, margin: '0 auto', outline: 'none' }}
-          onClick={vm.onPreviewClick}
+          onClick={doc.onPreviewClick}
           onBlur={(e) => {
-            if (!vm.active) return;
-            vm.setSource(vm.active.id, vm.htmlToMd(e.currentTarget.innerHTML));
+            if (!file) return;
+            vm.setSource(file.id, vm.htmlToMd(e.currentTarget.innerHTML));
           }}
-          onMouseUp={() => vm.selectPreviewTextInSource(window.getSelection()?.toString() || '')}
-          onKeyUp={() => vm.selectPreviewTextInSource(window.getSelection()?.toString() || '')}
+          onMouseUp={() => !secondary && vm.selectPreviewTextInSource(window.getSelection()?.toString() || '')}
+          onKeyUp={() => !secondary && vm.selectPreviewTextInSource(window.getSelection()?.toString() || '')}
           dangerouslySetInnerHTML={{ __html: mdHtml }}
         />
       </div>
@@ -70,22 +79,24 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
           </div>
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'auto', padding: 16, background: '#ece9e2', minHeight: 0 }}>
             <iframe
-              key={vm.active?.id}
+              key={file?.id}
               ref={htmlFrameRef}
               srcDoc={sourceValue}
               title="preview"
               sandbox="allow-scripts allow-same-origin"
               onLoad={() => {
-                const doc = htmlFrameRef.current?.contentDocument;
-                const id = vm.active?.id;
-                if (!doc || !id) return;
-                doc.designMode = 'on';
-                doc.addEventListener('focusout', () => {
-                  vm.setSource(id, '<!doctype html>\n' + doc.documentElement.outerHTML);
+                const iframeDoc = htmlFrameRef.current?.contentDocument;
+                const id = file?.id;
+                if (!iframeDoc || !id) return;
+                iframeDoc.designMode = 'on';
+                iframeDoc.addEventListener('focusout', () => {
+                  vm.setSource(id, '<!doctype html>\n' + iframeDoc.documentElement.outerHTML);
                 });
-                const onSelect = () => vm.selectPreviewTextInSource(doc.getSelection()?.toString() || '');
-                doc.addEventListener('mouseup', onSelect);
-                doc.addEventListener('keyup', onSelect);
+                if (!secondary) {
+                  const onSelect = () => vm.selectPreviewTextInSource(iframeDoc.getSelection()?.toString() || '');
+                  iframeDoc.addEventListener('mouseup', onSelect);
+                  iframeDoc.addEventListener('keyup', onSelect);
+                }
               }}
               style={{ width: WIDTHS[state.htmlWidth], maxWidth: '100%', height: '100%', minHeight: 520, border: '1px solid rgba(0,0,0,.12)', borderRadius: 10, background: '#fff', boxShadow: '0 6px 24px -10px rgba(0,0,0,.2)' }}
             />
@@ -102,7 +113,7 @@ export default function PreviewPane({ vm }: { vm: NotesAppVM }) {
       + esc(emlData.to) + '</div></div><div style="padding:26px 28px">' + emlData.body + '</div></div>';
     return (
       <div className="sc" style={paneStyle}>
-        <div ref={vm.previewElRef} dangerouslySetInnerHTML={{ __html: card }} />
+        <div ref={doc.previewElRef} dangerouslySetInnerHTML={{ __html: card }} />
       </div>
     );
   }

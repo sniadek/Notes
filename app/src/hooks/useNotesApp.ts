@@ -7,16 +7,27 @@ import {
 } from '../seedData';
 import { loadPersistedState, savePersistedState, type PersistedState } from '../lib/persist';
 import {
-  diffLines, htmlToMd, mdToHtml, outlineHtml, outlineMd, parseFront, slug, wordCount,
+  diffLines, htmlToMd, mdToHtml, outlineHtml, outlineMd, parseEml, parseFront, slug, wordCount,
 } from '../lib/markdown';
 import { agoLabel, dailyTitle, download, escapeRegExp, nowStamp, openInBrowser } from '../lib/utils';
 import {
-  copyFile as tauriCopyFile, createFile as tauriCreateFile, isTauri,
-  moveFile as tauriMoveFile, pickVaultRoot as tauriPickVaultRoot, readVaultTree, writeFile,
+  copyFile as tauriCopyFile, createFile as tauriCreateFile, deleteFile as tauriDeleteFile, isTauri,
+  moveFile as tauriMoveFile, pickVaultRoot as tauriPickVaultRoot, readFile, readVaultTree,
+  revealInFinder, writeFile,
 } from '../lib/tauriFs';
-import type { EmlData, FileType, HtmlWidth, NoteFile, ViewMode } from '../types';
+import {
+  TASK_MANAGER_ID, buildTaskLine, isOverdue, isToday, scanTasks,
+} from '../lib/tasks';
+import type { CustomFilter, EmlData, FileType, FilterRule, HtmlWidth, NoteFile, TaskPriority, ViewMode } from '../types';
 
 interface Suggest { kind: 'wiki' | 'slash'; q: string; caret: number; }
+
+export interface FolderNode {
+  path: string;
+  name: string;
+  roots: NoteFile[];
+  children: FolderNode[];
+}
 
 interface EphemeralState {
   paletteOpen: boolean;
@@ -30,11 +41,16 @@ interface EphemeralState {
   historyOpen: boolean;
   historyPick: number;
   graphOpen: boolean;
-  captureOpen: boolean;
-  captureText: string;
+  addTaskOpen: boolean;
+  addTaskText: string;
+  addTaskDue: string;
+  addTaskPriority: TaskPriority | '';
+  addTaskTargetId: string | null;
   shortcutsOpen: boolean;
   exportOpen: boolean;
   suggest: Suggest | null;
+  smartFilterModalOpen: boolean;
+  editingFilterId: string | null;
 }
 
 function ephemeralDefaults(): EphemeralState {
@@ -44,10 +60,12 @@ function ephemeralDefaults(): EphemeralState {
     findOpen: false, findQuery: '', replaceQuery: '', findRegex: false,
     historyOpen: false, historyPick: 0,
     graphOpen: false,
-    captureOpen: false, captureText: '',
+    addTaskOpen: false, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
     shortcutsOpen: false,
     exportOpen: false,
     suggest: null,
+    smartFilterModalOpen: false,
+    editingFilterId: null,
   };
 }
 
@@ -70,6 +88,80 @@ function insertRelative(order: string[], id: string, targetId: string, position:
   return [...base.slice(0, at), id, ...base.slice(at)];
 }
 
+// Folders are identified by '/'-joined path strings ("Engineering", "Engineering/A1"),
+// so nesting falls out of the string itself — no separate parent-id bookkeeping needed.
+const MAX_FOLDER_DEPTH = 3;
+
+function folderParentPath(path: string): string | undefined {
+  const idx = path.lastIndexOf('/');
+  return idx === -1 ? undefined : path.slice(0, idx);
+}
+
+function folderLeafName(path: string): string {
+  const idx = path.lastIndexOf('/');
+  return idx === -1 ? path : path.slice(idx + 1);
+}
+
+function folderPathDepth(path: string): number {
+  return path.split('/').length - 1;
+}
+
+interface DerivedDoc {
+  isMd: boolean;
+  isHtml: boolean;
+  isEml: boolean;
+  sourceValue: string;
+  outline: ReturnType<typeof outlineMd>;
+  words: number;
+  activeTags: string[];
+  emlData: EmlData;
+  mdHtml: string;
+  codeBlocks: Record<string, string>;
+  mermaidBlocks: Record<string, string>;
+}
+
+// Pure computation shared by the primary and secondary (split) panes — given a
+// file plus the raw source/eml maps, builds everything a pane needs to render.
+// idPrefix keeps generated code-block/mermaid-block ids from colliding when both
+// panes render markdown at once.
+function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, eml: Record<string, EmlData>, wiki: boolean, idPrefix: string): DerivedDoc {
+  const isMd = file?.type === 'md';
+  const isHtml = file?.type === 'html';
+  const isEml = file?.type === 'eml';
+  let sourceValue = '';
+  let outline: ReturnType<typeof outlineMd> = [];
+  let words = 0;
+  let activeTags: string[] = [];
+  let emlData: EmlData = { from: '', to: '', subject: '', body: '' };
+  let mdHtml = '';
+  let codeBlocks: Record<string, string> = {};
+  let mermaidBlocks: Record<string, string> = {};
+
+  if (file) {
+    if (isMd) {
+      sourceValue = sources[file.id] || '';
+      const fr = parseFront(sourceValue);
+      words = wordCount(fr.body);
+      outline = outlineMd(fr.body);
+      activeTags = fr.tags;
+      const rendered = mdToHtml(fr.body, wiki, idPrefix, fr.offset);
+      mdHtml = rendered.html;
+      codeBlocks = rendered.codeBlocks;
+      mermaidBlocks = rendered.mermaidBlocks;
+    } else if (isHtml) {
+      sourceValue = sources[file.id] || '';
+      words = wordCount(sourceValue);
+      outline = outlineHtml(sourceValue);
+    } else if (isEml) {
+      emlData = eml[file.id] || { from: '', to: '', subject: '', body: '' };
+      words = wordCount(emlData.body);
+      outline = outlineHtml(emlData.body);
+    }
+  }
+
+  return { isMd, isHtml, isEml, sourceValue, outline, words, activeTags, emlData, mdHtml, codeBlocks, mermaidBlocks };
+}
+
 export function useNotesApp(showRightSidebar = true) {
   const [state, setStateRaw] = useState<FullState>(() => ({ ...loadPersistedState(), ...ephemeralDefaults() }));
   const stateRef = useRef(state);
@@ -86,11 +178,12 @@ export function useNotesApp(showRightSidebar = true) {
     saveTimer.current = window.setTimeout(() => {
       const p: PersistedState = {
         collapsed: state.collapsed, railHidden: state.railHidden, view: state.view, activeId: state.activeId,
+        secondaryId: state.secondaryId, secondaryView: state.secondaryView,
         openTabs: state.openTabs, filter: state.filter, expandedDocs: state.expandedDocs, editedAt: state.editedAt,
         dynamicFiles: state.dynamicFiles, sources: state.sources, eml: state.eml, history: state.history,
         wiki: state.wiki, autosave: state.autosave, htmlWidth: state.htmlWidth, vaultRoot: state.vaultRoot,
         design: state.design, folderOrder: state.folderOrder, noteOrder: state.noteOrder, fileMoves: state.fileMoves,
-        createdAt: state.createdAt,
+        createdAt: state.createdAt, customFilters: state.customFilters, pinnedFolders: state.pinnedFolders,
       };
       savePersistedState(p);
     }, 250);
@@ -105,10 +198,12 @@ export function useNotesApp(showRightSidebar = true) {
   // Seed files are immutable imports, so folder/parent moves (drag reorder, nesting) are
   // recorded here and merged on top — this lets any note (seed or dynamic) be reorganized.
   const all = useMemo<NoteFile[]>(() => {
-    const merged = [...filesSeed, ...state.dynamicFiles];
+    // Once a real vault is connected, the sidebar mirrors that folder only — the
+    // built-in demo notes are a no-vault/first-run convenience, not permanent content.
+    const merged = state.vaultRoot ? [...state.dynamicFiles] : [...filesSeed, ...state.dynamicFiles];
     if (!Object.keys(state.fileMoves).length) return merged;
     return merged.map((f) => (state.fileMoves[f.id] ? { ...f, ...state.fileMoves[f.id] } : f));
-  }, [state.dynamicFiles, state.fileMoves]);
+  }, [state.dynamicFiles, state.fileMoves, state.vaultRoot]);
   const fileOfMap = useMemo(() => {
     const map = new Map<string, NoteFile>();
     all.forEach((f) => map.set(f.id, f));
@@ -126,8 +221,12 @@ export function useNotesApp(showRightSidebar = true) {
   const sourceElRef = useRef<HTMLTextAreaElement | null>(null);
   const previewElRef = useRef<HTMLDivElement | null>(null);
   const paletteInputRef = useRef<HTMLInputElement | null>(null);
-  const captureInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const addTaskInputRef = useRef<HTMLInputElement | null>(null);
   const mermaidBlocksRef = useRef<Record<string, string>>({});
+  // secondary (split) pane refs — mirror the primary pane's refs above
+  const sourceElRef2 = useRef<HTMLTextAreaElement | null>(null);
+  const previewElRef2 = useRef<HTMLDivElement | null>(null);
+  const mermaidBlocksRef2 = useRef<Record<string, string>>({});
 
   const touch = useCallback((id: string) => {
     setState((s) => ({ editedAt: { ...s.editedAt, [id]: Date.now() } }));
@@ -159,6 +258,14 @@ export function useNotesApp(showRightSidebar = true) {
     });
   }, [setState]);
 
+  const openSplit = useCallback((id: string) => {
+    setState({ secondaryId: id });
+  }, [setState]);
+
+  const closeSplitPane = useCallback(() => {
+    setState({ secondaryId: null });
+  }, [setState]);
+
   const openOrCreate = useCallback((title: string) => {
     const f = all.find((x) => x.title.toLowerCase() === title.toLowerCase());
     if (f) { open(f.id); return; }
@@ -175,11 +282,6 @@ export function useNotesApp(showRightSidebar = true) {
     const root = stateRef.current.vaultRoot;
     return root ? root + '/' + folder + '/' + file : '';
   }, []);
-
-  const pickVaultRoot = useCallback(async () => {
-    const dir = await tauriPickVaultRoot();
-    if (dir) setState({ vaultRoot: dir });
-  }, [setState]);
 
   const newFile = useCallback((folder: string, parent?: string) => {
     const n = stateRef.current.dynamicFiles.filter((f) => f.folder === folder).length + 1;
@@ -249,23 +351,92 @@ export function useNotesApp(showRightSidebar = true) {
     const entries = await readVaultTree(root).catch(() => []);
     const known = new Set(stateRef.current.dynamicFiles.map((f) => f.path).filter(Boolean));
     const added: NoteFile[] = [];
-    entries.filter((e) => !e.is_dir).forEach((e) => {
-      if (known.has(e.path)) return;
+    const discoveredFolders = new Set<string>();
+    entries.forEach((e) => {
       const rel = e.path.slice(root.length + 1);
-      const folder = rel.includes('/') ? rel.split('/')[0] : 'Notes';
+      if (!rel) return;
+      if (e.is_dir) {
+        // Register every real directory, including ones with no files directly in
+        // them, so the sidebar is a complete mirror of what's actually on disk.
+        discoveredFolders.add(rel);
+        return;
+      }
+      if (known.has(e.path)) return;
+      const lastSlash = rel.lastIndexOf('/');
+      const folder = lastSlash === -1 ? 'Notes' : rel.slice(0, lastSlash);
       const ext = e.name.split('.').pop() || 'md';
       const type: FileType = ext === 'html' ? 'html' : ext === 'eml' ? 'eml' : 'md';
       added.push({ id: 'fs-' + e.path, title: e.name.replace(/\.[^.]+$/, ''), file: e.name, type, folder, pinned: false, path: e.path });
+      const parts = folder.split('/');
+      for (let i = 1; i <= parts.length; i += 1) discoveredFolders.add(parts.slice(0, i).join('/'));
     });
-    if (added.length) {
-      const now = Date.now();
-      setState((s) => ({
-        dynamicFiles: [...s.dynamicFiles, ...added],
-        noteOrder: [...s.noteOrder, ...added.map((f) => f.id)],
-        createdAt: { ...s.createdAt, ...Object.fromEntries(added.map((f) => [f.id, now])) },
+    // Newly-discovered files never have content yet, and any already-known vault file
+    // that's still missing its content (e.g. from before this fix, or a prior failed
+    // read) gets picked up here too — so a stale/blank note self-heals on next refresh.
+    const stale = stateRef.current.dynamicFiles.filter((f) => (
+      f.path && !added.includes(f) && (f.type === 'eml' ? !(f.id in stateRef.current.eml) : !(f.id in stateRef.current.sources))
+    ));
+    const toRead = [...added, ...stale];
+    const newSources: Record<string, string> = {};
+    const newEml: Record<string, EmlData> = {};
+    if (toRead.length) {
+      await Promise.all(toRead.map(async (f) => {
+        if (!f.path) return;
+        const raw = await readFile(f.path).catch(() => null);
+        if (raw === null) return;
+        if (f.type === 'eml') newEml[f.id] = parseEml(raw);
+        else newSources[f.id] = raw;
       }));
     }
+
+    if (added.length || discoveredFolders.size || Object.keys(newSources).length || Object.keys(newEml).length) {
+      const now = Date.now();
+      setState((s) => {
+        const newFolders = Array.from(discoveredFolders).filter((f) => !s.folderOrder.includes(f));
+        return {
+          dynamicFiles: added.length ? [...s.dynamicFiles, ...added] : s.dynamicFiles,
+          noteOrder: added.length ? [...s.noteOrder, ...added.map((f) => f.id)] : s.noteOrder,
+          createdAt: added.length ? { ...s.createdAt, ...Object.fromEntries(added.map((f) => [f.id, now])) } : s.createdAt,
+          folderOrder: newFolders.length ? [...s.folderOrder, ...newFolders] : s.folderOrder,
+          sources: Object.keys(newSources).length ? { ...s.sources, ...newSources } : s.sources,
+          eml: Object.keys(newEml).length ? { ...s.eml, ...newEml } : s.eml,
+        };
+      });
+    }
   }, [setState]);
+
+  const pickVaultRoot = useCallback(async () => {
+    const dir = await tauriPickVaultRoot();
+    if (!dir) return;
+
+    // Switching (or connecting) a vault makes the sidebar mirror that folder only —
+    // drop everything tied to whatever was showing before (old vault or demo data)
+    // and rescan immediately, so vault and sidebar folders never disagree.
+    const oldIds = new Set(stateRef.current.dynamicFiles.map((f) => f.id));
+    const stripOld = <T,>(rec: Record<string, T>): Record<string, T> => (
+      Object.fromEntries(Object.entries(rec).filter(([id]) => !oldIds.has(id)))
+    );
+    const reset: Partial<FullState> = {
+      vaultRoot: dir,
+      dynamicFiles: [],
+      folderOrder: [],
+      noteOrder: [],
+      fileMoves: {},
+      expandedDocs: {},
+      pinnedFolders: [],
+      sources: stripOld(stateRef.current.sources),
+      eml: stripOld(stateRef.current.eml),
+      history: stripOld(stateRef.current.history),
+      editedAt: stripOld(stateRef.current.editedAt),
+      createdAt: stripOld(stateRef.current.createdAt),
+      openTabs: [],
+      activeId: null,
+      secondaryId: null,
+    };
+    setState(reset);
+    stateRef.current = { ...stateRef.current, ...reset };
+    await refreshVault();
+  }, [refreshVault, setState]);
 
   // Poll the vault folder in the background so files created externally (e.g. by an
   // automation) surface in "Recently created" without the user manually hitting refresh.
@@ -277,8 +448,8 @@ export function useNotesApp(showRightSidebar = true) {
     return () => window.clearInterval(id);
   }, [refreshVault]);
 
-  const toggleTask = useCallback((idx: number) => {
-    const id = stateRef.current.activeId;
+  const toggleTask = useCallback((idx: number, forId?: string | null) => {
+    const id = forId ?? stateRef.current.activeId;
     if (!id) return;
     const lines = (stateRef.current.sources[id] || '').split('\n');
     if (!lines[idx]) return;
@@ -290,39 +461,73 @@ export function useNotesApp(showRightSidebar = true) {
     const title = dailyTitle();
     const id = 'daily-' + title;
     if (!fileOf(id)) {
+      const file = title + '.md';
+      const body = '---\ntags: [daily]\n---\n# ' + title + '\n\n';
+      const nf: NoteFile = { id, title, file, type: 'md', folder: 'Daily', pinned: false };
+      if (isTauri() && stateRef.current.vaultRoot) {
+        nf.path = vaultPath('Daily', file);
+        tauriCreateFile(nf.path, body).catch(() => {});
+      }
       setState((s) => ({
-        dynamicFiles: [...s.dynamicFiles, { id, title, file: title + '.md', type: 'md' as FileType, folder: 'Daily', pinned: false }],
-        sources: { ...s.sources, [id]: '---\ntags: [daily]\n---\n# ' + title + '\n\n' },
+        dynamicFiles: [...s.dynamicFiles, nf],
+        sources: { ...s.sources, [id]: body },
         createdAt: { ...s.createdAt, [id]: Date.now() },
       }));
     }
     return id;
-  }, [fileOf, setState]);
+  }, [fileOf, setState, vaultPath]);
 
   const openDaily = useCallback(() => {
     const id = ensureDaily();
     setTimeout(() => open(id), 0);
   }, [ensureDaily, open]);
 
-  const openCapture = useCallback(() => setState({ captureOpen: true, captureText: '' }), [setState]);
-  const closeCapture = useCallback(() => setState({ captureOpen: false }), [setState]);
+  const openTaskManager = useCallback(() => setState({ activeId: TASK_MANAGER_ID }), [setState]);
 
-  const saveCapture = useCallback(() => {
-    const txt = stateRef.current.captureText.trim();
-    if (!txt) { setState({ captureOpen: false }); return; }
-    const id = ensureDaily();
-    const t = new Date();
-    const stamp = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+  const openAddTask = useCallback(() => setState({
+    addTaskOpen: true, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
+  }), [setState]);
+  const closeAddTask = useCallback(() => setState({ addTaskOpen: false }), [setState]);
+
+  // Shared by the Add Task modal and the Task Manager page's inline add row —
+  // `navigate: false` lets a caller append a task without leaving the page it's on.
+  const addTaskLine = useCallback((opts: {
+    text: string; due?: string; priority?: TaskPriority; targetId?: string | null; navigate?: boolean;
+  }) => {
+    const txt = opts.text.trim();
+    if (!txt) return;
+    const line = buildTaskLine({ text: txt, due: opts.due, priority: opts.priority });
+    const explicitTarget = opts.targetId;
+    const id = explicitTarget || ensureDaily();
+    const path = explicitTarget
+      ? fileOf(explicitTarget)?.path
+      : (isTauri() && stateRef.current.vaultRoot ? vaultPath('Daily', dailyTitle() + '.md') : undefined);
+    const navigate = opts.navigate !== false;
     setTimeout(() => {
-      setState((s) => ({
-        sources: { ...s.sources, [id]: (s.sources[id] || '') + '- ' + stamp + ' ' + txt + '\n' },
-        captureOpen: false,
-        captureText: '',
-        activeId: id,
-        openTabs: s.openTabs.includes(id) ? s.openTabs : [...s.openTabs, id],
-      }));
+      setState((s2) => {
+        const prev = s2.sources[id] || '';
+        const sep = prev && !prev.endsWith('\n') ? '\n' : '';
+        const next = prev + sep + line + '\n';
+        if (isTauri() && path) writeFile(path, next).catch(() => {});
+        return {
+          sources: { ...s2.sources, [id]: next },
+          editedAt: { ...s2.editedAt, [id]: Date.now() },
+          ...(navigate ? { activeId: id, openTabs: s2.openTabs.includes(id) ? s2.openTabs : [...s2.openTabs, id] } : {}),
+        };
+      });
     }, 0);
-  }, [ensureDaily, setState]);
+  }, [ensureDaily, fileOf, setState, vaultPath]);
+
+  const saveAddTask = useCallback(() => {
+    const s = stateRef.current;
+    if (!s.addTaskText.trim()) { setState({ addTaskOpen: false }); return; }
+    addTaskLine({
+      text: s.addTaskText, due: s.addTaskDue || undefined, priority: s.addTaskPriority || undefined, targetId: s.addTaskTargetId,
+    });
+    setState({
+      addTaskOpen: false, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
+    });
+  }, [addTaskLine, setState]);
 
   const aiGenerate = useCallback(() => {
     const id = stateRef.current.activeId;
@@ -384,6 +589,7 @@ export function useNotesApp(showRightSidebar = true) {
 
   // ---- preview click delegation (copy / task / wiki) ----
   const codeBlocksRef = useRef<Record<string, string>>({});
+  const codeBlocksRef2 = useRef<Record<string, string>>({});
   const onPreviewClick = useCallback((e: MouseEvent) => {
     const target = (e.target as HTMLElement).closest('[data-copy],[data-task],[data-wiki]') as HTMLElement | null;
     if (!target) return;
@@ -396,6 +602,23 @@ export function useNotesApp(showRightSidebar = true) {
       return;
     }
     if (target.hasAttribute('data-task')) { toggleTask(+target.getAttribute('data-task')!); return; }
+    if (target.hasAttribute('data-wiki')) { openOrCreate(target.getAttribute('data-wiki')!); return; }
+  }, [openOrCreate, toggleTask]);
+
+  // secondary (split) pane mirror of onPreviewClick above — copies from its own
+  // codeBlocksRef2 and toggles tasks against the secondary doc, not the active one.
+  const onPreviewClickSecondary = useCallback((e: MouseEvent) => {
+    const target = (e.target as HTMLElement).closest('[data-copy],[data-task],[data-wiki]') as HTMLElement | null;
+    if (!target) return;
+    if (target.hasAttribute('data-copy')) {
+      const raw = codeBlocksRef2.current[target.getAttribute('data-copy')!];
+      if (raw && navigator.clipboard) navigator.clipboard.writeText(raw);
+      const o = target.textContent;
+      target.textContent = 'Copied';
+      setTimeout(() => { try { target.textContent = o; } catch { /* ignore */ } }, 1000);
+      return;
+    }
+    if (target.hasAttribute('data-task')) { toggleTask(+target.getAttribute('data-task')!, stateRef.current.secondaryId); return; }
     if (target.hasAttribute('data-wiki')) { openOrCreate(target.getAttribute('data-wiki')!); return; }
   }, [openOrCreate, toggleTask]);
 
@@ -468,26 +691,27 @@ export function useNotesApp(showRightSidebar = true) {
       if (meta && k === 'k') { e.preventDefault(); setState((s2) => ({ paletteOpen: !s2.paletteOpen, paletteQuery: '', paletteIdx: 0 })); }
       else if (meta && k === 'f' && s.activeId) { e.preventDefault(); setState((s2) => ({ findOpen: !s2.findOpen })); }
       else if (meta && k === 'g') { e.preventDefault(); setState((s2) => ({ graphOpen: !s2.graphOpen })); }
-      else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); openCapture(); }
+      else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); openAddTask(); }
+      else if (meta && e.shiftKey && k === 't') { e.preventDefault(); openTaskManager(); }
       else if (meta && k === 'e' && s.activeId) { e.preventDefault(); setState((s2) => ({ view: s2.view === 'preview' ? 'edit' : 'preview' })); }
       else if (meta && e.key === '/') { e.preventDefault(); setState((s2) => ({ shortcutsOpen: !s2.shortcutsOpen })); }
       else if (meta && k === 'w' && s.activeId) { e.preventDefault(); closeTab(s.activeId); }
       else if (meta && /^[1-9]$/.test(e.key)) { const i = +e.key - 1; if (s.openTabs[i]) { e.preventDefault(); setState({ activeId: s.openTabs[i] }); } }
       else if (meta && e.shiftKey && e.key === '|') { e.preventDefault(); setState((s2) => ({ railHidden: !s2.railHidden })); }
       else if (meta && e.key === '\\') { e.preventDefault(); setState((s2) => ({ collapsed: !s2.collapsed })); }
-      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, graphOpen: false, captureOpen: false, shortcutsOpen: false, exportOpen: false, suggest: null }); }
+      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, graphOpen: false, addTaskOpen: false, shortcutsOpen: false, exportOpen: false, suggest: null, smartFilterModalOpen: false }); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTab, openCapture, setState]);
+  }, [closeTab, openAddTask, openTaskManager, setState]);
 
   // focus management
   useEffect(() => {
     if (state.paletteOpen && paletteInputRef.current) setTimeout(() => { try { paletteInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
   }, [state.paletteOpen]);
   useEffect(() => {
-    if (state.captureOpen && captureInputRef.current) setTimeout(() => { try { captureInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
-  }, [state.captureOpen]);
+    if (state.addTaskOpen && addTaskInputRef.current) setTimeout(() => { try { addTaskInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
+  }, [state.addTaskOpen]);
 
   // =================== derived view model ===================
   const active = fileOf(state.activeId);
@@ -497,34 +721,17 @@ export function useNotesApp(showRightSidebar = true) {
   const showSource = !!active && (state.view === 'edit' || state.view === 'split');
   const showPreview = !!active && (state.view === 'preview' || state.view === 'split');
 
-  let sourceValue = '';
-  let outline: ReturnType<typeof outlineMd> = [];
-  let words = 0;
-  let activeTags: string[] = [];
-  let emlData: EmlData = { from: '', to: '', subject: '', body: '' };
-  let mdHtml = '';
+  const primaryDoc = deriveDoc(active, state.sources, state.eml, state.wiki, '');
+  const {
+    sourceValue, outline, words, activeTags, emlData, mdHtml,
+  } = primaryDoc;
+  codeBlocksRef.current = primaryDoc.codeBlocks;
+  mermaidBlocksRef.current = primaryDoc.mermaidBlocks;
 
-  if (active) {
-    if (isMd) {
-      sourceValue = state.sources[active.id] || '';
-      const fr = parseFront(sourceValue);
-      words = wordCount(fr.body);
-      outline = outlineMd(fr.body);
-      activeTags = fr.tags;
-      const rendered = mdToHtml(fr.body, state.wiki, '', fr.offset);
-      mdHtml = rendered.html;
-      codeBlocksRef.current = rendered.codeBlocks;
-      mermaidBlocksRef.current = rendered.mermaidBlocks;
-    } else if (isHtml) {
-      sourceValue = state.sources[active.id] || '';
-      words = wordCount(sourceValue);
-      outline = outlineHtml(sourceValue);
-    } else if (isEml) {
-      emlData = state.eml[active.id] || { from: '', to: '', subject: '', body: '' };
-      words = wordCount(emlData.body);
-      outline = outlineHtml(emlData.body);
-    }
-  }
+  const secondaryFile = fileOf(state.secondaryId);
+  const secondaryDoc = deriveDoc(secondaryFile, state.sources, state.eml, state.wiki, 'sec-');
+  codeBlocksRef2.current = secondaryDoc.codeBlocks;
+  mermaidBlocksRef2.current = secondaryDoc.mermaidBlocks;
 
   // katex/mermaid hydration after markdown preview paints
   useEffect(() => {
@@ -548,6 +755,29 @@ export function useNotesApp(showRightSidebar = true) {
       } catch { /* ignore */ }
     });
   }, [isMd, mdHtml]);
+
+  // secondary (split) pane mirror of the katex/mermaid hydration effect above
+  useEffect(() => {
+    const root = previewElRef2.current;
+    if (!root || !secondaryDoc.isMd) return;
+    root.querySelectorAll('[data-tex]:not([data-done])').forEach((el) => {
+      el.setAttribute('data-done', '1');
+      try { katex.render(el.getAttribute('data-tex') || '', el as HTMLElement, { throwOnError: false }); } catch { /* ignore */ }
+    });
+    if (!mermaidInit) {
+      try { mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'neutral' }); } catch { /* ignore */ }
+      mermaidInit = true;
+    }
+    root.querySelectorAll('.mmd:not([data-done])').forEach((el, i) => {
+      el.setAttribute('data-done', '1');
+      const code = mermaidBlocksRef2.current[el.getAttribute('data-mmd') || ''];
+      if (!code) return;
+      const id = 'mmdsvg2' + Date.now() + i;
+      try {
+        mermaid.render(id, code).then((r) => { el.innerHTML = r.svg; }).catch(() => { el.setAttribute('data-done', ''); });
+      } catch { /* ignore */ }
+    });
+  }, [secondaryDoc.isMd, secondaryDoc.mdHtml]);
 
   // backlinks
   const backlinks = (active && backlinkMap[active.id]) || [];
@@ -627,7 +857,8 @@ export function useNotesApp(showRightSidebar = true) {
     const cmds = [
       { title: 'New Markdown Note', run: 'newNote' },
       { title: "Open Today's Daily Note", run: 'openDaily' },
-      { title: 'Quick Capture', run: 'capture' },
+      { title: 'Add Task', run: 'addTask' },
+      { title: 'Open Task Manager', run: 'taskManager' },
       { title: 'Graph View', run: 'graph' },
       { title: 'Toggle Sidebar', run: 'sidebar' },
       { title: 'Find & Replace', run: 'find' },
@@ -646,7 +877,8 @@ export function useNotesApp(showRightSidebar = true) {
     switch (r.id) {
       case 'newNote': openOrCreate('Untitled ' + (stateRef.current.dynamicFiles.length + 1)); break;
       case 'openDaily': openDaily(); break;
-      case 'capture': openCapture(); break;
+      case 'addTask': openAddTask(); break;
+      case 'taskManager': openTaskManager(); break;
       case 'graph': setState({ graphOpen: true }); break;
       case 'sidebar': setState((s) => ({ collapsed: !s.collapsed })); break;
       case 'find': setState({ findOpen: true }); break;
@@ -655,7 +887,7 @@ export function useNotesApp(showRightSidebar = true) {
       case 'window': try { window.open(location.href, '_blank'); } catch { /* ignore */ } break;
       case 'settings': setState({ settingsOpen: true }); break;
     }
-  }, [open, openCapture, openDaily, openOrCreate, setState]);
+  }, [open, openAddTask, openDaily, openOrCreate, openTaskManager, setState]);
 
   // find & replace
   let findCount = '';
@@ -725,6 +957,20 @@ export function useNotesApp(showRightSidebar = true) {
     .sort((a, b) => state.createdAt[b.id] - state.createdAt[a.id])
     .slice(0, 10), [all, state.createdAt]);
 
+  // tasks (aggregated from checkbox lines across all markdown notes)
+  const tasks = useMemo(() => scanTasks(all, state.sources), [all, state.sources]);
+  const taskCounts = useMemo(
+    () => tasks.filter((t) => !t.done && (isOverdue(t.due) || isToday(t.due))).length,
+    [tasks],
+  );
+
+  // pinned
+  const pinnedFiles = useMemo(() => all.filter((f) => f.pinned), [all]);
+  const pinnedFolderPaths = useMemo(
+    () => state.folderOrder.filter((p) => state.pinnedFolders.includes(p)),
+    [state.folderOrder, state.pinnedFolders],
+  );
+
   // tags
   const tagCount = useMemo(() => {
     const m: Record<string, number> = {};
@@ -772,6 +1018,36 @@ export function useNotesApp(showRightSidebar = true) {
     return false;
   }, [fileOf]);
 
+  // Seed/demo notes aren't stored as removable entries (they're not in dynamicFiles, only
+  // ever patched via fileMoves), so deletion is only offered for real vault/dynamic files.
+  const deleteFile = useCallback((id: string) => {
+    const f = fileOf(id);
+    const isDynamic = stateRef.current.dynamicFiles.some((d) => d.id === id);
+    if (!f || !isDynamic) return;
+    if (!window.confirm('Delete "' + f.title + '"? This can\'t be undone.')) return;
+    if (isTauri() && f.path) tauriDeleteFile(f.path).catch(() => {});
+    const kids = childrenOf(id);
+    setState((s) => {
+      const strip = <T,>(rec: Record<string, T>): Record<string, T> => (
+        Object.fromEntries(Object.entries(rec).filter(([k]) => k !== id))
+      );
+      const fileMoves = { ...s.fileMoves };
+      delete fileMoves[id];
+      kids.forEach((k) => { fileMoves[k.id] = { ...fileMoves[k.id], parent: f.parent }; });
+      return {
+        dynamicFiles: s.dynamicFiles.filter((x) => x.id !== id),
+        noteOrder: withoutId(s.noteOrder, id),
+        sources: strip(s.sources),
+        eml: strip(s.eml),
+        history: strip(s.history),
+        editedAt: strip(s.editedAt),
+        createdAt: strip(s.createdAt),
+        fileMoves,
+      };
+    });
+    closeTab(id);
+  }, [childrenOf, closeTab, fileOf, setState]);
+
   const reorderNote = useCallback((draggedId: string, targetId: string, position: 'before' | 'after' | 'inside') => {
     if (draggedId === targetId) return;
     const target = fileOf(targetId);
@@ -793,10 +1069,63 @@ export function useNotesApp(showRightSidebar = true) {
     }));
   }, [depthOf, fileOf, isDescendantOf, setState, subtreeDepth]);
 
-  const reorderFolder = useCallback((draggedName: string, targetName: string, position: 'before' | 'after') => {
-    if (draggedName === targetName) return;
-    setState((s) => ({ folderOrder: insertRelative(s.folderOrder, draggedName, targetName, position) }));
-  }, [setState]);
+  const folderSubtreeDepth = useCallback((path: string): number => {
+    const kids = stateRef.current.folderOrder.filter((p) => folderParentPath(p) === path);
+    if (!kids.length) return 0;
+    return 1 + Math.max(...kids.map((k) => folderSubtreeDepth(k)));
+  }, []);
+
+  const reorderFolder = useCallback((draggedPath: string, targetPath: string, position: 'before' | 'after' | 'inside') => {
+    if (draggedPath === targetPath) return;
+    if (targetPath === draggedPath || targetPath.startsWith(draggedPath + '/')) return; // no cycles
+
+    const targetParent = folderParentPath(targetPath);
+    const newParent = position === 'inside' ? targetPath : targetParent;
+    const oldParent = folderParentPath(draggedPath);
+
+    if (position === 'inside' && folderPathDepth(targetPath) + 1 + folderSubtreeDepth(draggedPath) > MAX_FOLDER_DEPTH) return;
+
+    if (newParent === oldParent && position !== 'inside') {
+      setState((s) => ({ folderOrder: insertRelative(s.folderOrder, draggedPath, targetPath, position) }));
+      return;
+    }
+
+    const leafName = folderLeafName(draggedPath);
+    const newPath = newParent ? newParent + '/' + leafName : leafName;
+    if (newPath !== draggedPath && stateRef.current.folderOrder.includes(newPath)) return; // name collision at destination
+
+    const remap = (p: string): string => {
+      if (p === draggedPath) return newPath;
+      if (p.startsWith(draggedPath + '/')) return newPath + p.slice(draggedPath.length);
+      return p;
+    };
+
+    setState((s) => {
+      let nextOrder = s.folderOrder.map(remap);
+      nextOrder = position === 'inside'
+        ? [...withoutId(nextOrder, newPath), newPath]
+        : insertRelative(nextOrder, newPath, targetPath, position);
+
+      const nextExpanded: Record<string, boolean> = {};
+      Object.entries(s.expandedDocs).forEach(([k, v]) => {
+        if (k.startsWith('folder:')) {
+          const np = remap(k.slice(7));
+          nextExpanded['folder:' + np] = v;
+        } else {
+          nextExpanded[k] = v;
+        }
+      });
+
+      const nextFileMoves = { ...s.fileMoves };
+      all.forEach((f) => {
+        if (f.folder === draggedPath || f.folder.startsWith(draggedPath + '/')) {
+          nextFileMoves[f.id] = { ...s.fileMoves[f.id], folder: remap(f.folder) };
+        }
+      });
+
+      return { folderOrder: nextOrder, expandedDocs: nextExpanded, fileMoves: nextFileMoves };
+    });
+  }, [all, folderSubtreeDepth, setState]);
 
   const renameFile = useCallback((id: string, newTitle: string) => {
     const f = fileOf(id);
@@ -814,6 +1143,32 @@ export function useNotesApp(showRightSidebar = true) {
     }));
   }, [fileOf, setState, vaultPath]);
 
+  const togglePinFile = useCallback((id: string) => {
+    const f = fileOf(id);
+    if (!f) return;
+    setState((s) => ({
+      fileMoves: { ...s.fileMoves, [id]: { ...s.fileMoves[id], pinned: !f.pinned } },
+    }));
+  }, [fileOf, setState]);
+
+  const togglePinFolder = useCallback((path: string) => {
+    setState((s) => ({
+      pinnedFolders: s.pinnedFolders.includes(path)
+        ? s.pinnedFolders.filter((p) => p !== path)
+        : [...s.pinnedFolders, path],
+    }));
+  }, [setState]);
+
+  const revealFile = useCallback((id: string) => {
+    const f = fileOf(id);
+    if (f?.path) revealInFinder(f.path).catch(() => {});
+  }, [fileOf]);
+
+  const revealFolder = useCallback((path: string) => {
+    const root = stateRef.current.vaultRoot;
+    if (root) revealInFinder(root + '/' + path).catch(() => {});
+  }, []);
+
   const collapseAllFolders = useCallback(() => {
     setState((s) => ({
       expandedDocs: {
@@ -823,11 +1178,31 @@ export function useNotesApp(showRightSidebar = true) {
     }));
   }, [setState]);
 
-  const createFolder = useCallback((name: string) => {
+  const createFolder = useCallback((name: string, parentPath?: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    setState((s) => (s.folderOrder.includes(trimmed) ? {} : { folderOrder: [...s.folderOrder, trimmed] }));
+    const path = parentPath ? parentPath + '/' + trimmed : trimmed;
+    if (folderPathDepth(path) > MAX_FOLDER_DEPTH) return;
+    setState((s) => (s.folderOrder.includes(path) ? {} : { folderOrder: [...s.folderOrder, path] }));
   }, [setState]);
+
+  const matchesRule = useCallback((f: NoteFile, rule: FilterRule): boolean => {
+    switch (rule.field) {
+      case 'type': return f.type === rule.value;
+      case 'tag': return fileTags(f.id).includes(rule.value);
+      case 'folder': return f.folder === rule.value || f.folder.startsWith(rule.value + '/');
+      case 'pinned': return String(f.pinned) === rule.value;
+      case 'filename': return f.file.toLowerCase().includes(rule.value.toLowerCase());
+      case 'text': {
+        const needle = rule.value.toLowerCase();
+        const body = bodyOf(f).replace(/<[^>]+>/g, ' ').toLowerCase();
+        return f.title.toLowerCase().includes(needle) || body.includes(needle);
+      }
+      case 'createdAfter': return (stateRef.current.createdAt[f.id] || 0) >= Date.parse(rule.value);
+      case 'createdBefore': return (stateRef.current.createdAt[f.id] || 0) <= Date.parse(rule.value);
+      default: return true;
+    }
+  }, [bodyOf, fileTags]);
 
   const pred = useCallback((f: NoteFile): boolean => {
     const k = state.filter;
@@ -837,13 +1212,69 @@ export function useNotesApp(showRightSidebar = true) {
     if (k === 'html') return f.type === 'html';
     if (k === 'email') return f.type === 'eml';
     if (k.startsWith('tag:')) return fileTags(f.id).includes(k.slice(4));
+    if (k.startsWith('custom:')) {
+      const cf = state.customFilters.find((c) => c.id === k.slice(7));
+      if (!cf || !cf.rules.length) return true;
+      return cf.match === 'all' ? cf.rules.every((r) => matchesRule(f, r)) : cf.rules.some((r) => matchesRule(f, r));
+    }
     return true;
-  }, [fileTags, state.filter]);
+  }, [fileTags, matchesRule, state.customFilters, state.filter]);
 
-  const folders = useMemo(() => state.folderOrder.map((name) => ({
-    name,
-    roots: all.filter((f) => f.folder === name && !f.parent && pred(f)).sort((a, b) => orderIdx(a.id) - orderIdx(b.id)),
-  })).filter((g) => g.roots.length || state.filter === 'all'), [all, pred, state.folderOrder, orderIdx, state.filter]);
+  const createCustomFilter = useCallback((filter: Omit<CustomFilter, 'id'>): string => {
+    const id = 'filter-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    setState((s) => ({ customFilters: [...s.customFilters, { ...filter, id }] }));
+    return id;
+  }, [setState]);
+
+  const updateCustomFilter = useCallback((id: string, patch: Partial<Omit<CustomFilter, 'id'>>) => {
+    setState((s) => ({ customFilters: s.customFilters.map((c) => (c.id === id ? { ...c, ...patch } : c)) }));
+  }, [setState]);
+
+  const deleteCustomFilter = useCallback((id: string) => {
+    setState((s) => ({
+      customFilters: s.customFilters.filter((c) => c.id !== id),
+      filter: s.filter === 'custom:' + id ? 'all' : s.filter,
+    }));
+  }, [setState]);
+
+  const openSmartFilterCreator = useCallback((editId?: string) => {
+    setState({ smartFilterModalOpen: true, editingFilterId: editId ?? null });
+  }, [setState]);
+
+  const closeSmartFilterModal = useCallback(() => {
+    setState({ smartFilterModalOpen: false });
+  }, [setState]);
+
+  const customFilterCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    state.customFilters.forEach((cf) => {
+      counts[cf.id] = cf.rules.length === 0
+        ? all.length
+        : all.filter((f) => (cf.match === 'all' ? cf.rules.every((r) => matchesRule(f, r)) : cf.rules.some((r) => matchesRule(f, r)))).length;
+    });
+    return counts;
+  }, [all, matchesRule, state.customFilters]);
+
+  const folderTree = useMemo(() => {
+    const byParent = new Map<string | undefined, string[]>();
+    state.folderOrder.forEach((path) => {
+      const parent = folderParentPath(path);
+      const list = byParent.get(parent) || [];
+      list.push(path);
+      byParent.set(parent, list);
+    });
+    const build = (parent: string | undefined): FolderNode[] => (byParent.get(parent) || []).map((path) => ({
+      path,
+      name: folderLeafName(path),
+      roots: all.filter((f) => f.folder === path && !f.parent && pred(f)).sort((a, b) => orderIdx(a.id) - orderIdx(b.id)),
+      children: build(path),
+    }));
+    const hasVisibleContent = (node: FolderNode): boolean => node.roots.length > 0 || node.children.some(hasVisibleContent);
+    const pruneEmpty = (nodes: FolderNode[]): FolderNode[] => nodes
+      .filter((n) => state.filter === 'all' || hasVisibleContent(n))
+      .map((n) => ({ ...n, children: pruneEmpty(n.children) }));
+    return pruneEmpty(build(undefined));
+  }, [all, pred, state.folderOrder, orderIdx, state.filter]);
 
   // breadcrumb
   const pathSegments = useMemo(() => {
@@ -851,13 +1282,38 @@ export function useNotesApp(showRightSidebar = true) {
     const ancestors: NoteFile[] = [];
     let p = active.parent;
     while (p) { const pf = fileOf(p); if (!pf) break; ancestors.unshift(pf); p = pf.parent; }
-    const firstInFolder = all.find((f) => f.folder === active.folder && !f.parent);
     const segs: { label: string; title: string; id?: string; current: boolean }[] = [];
-    segs.push({ label: active.folder, title: 'Folder · ' + active.folder, id: firstInFolder?.id, current: false });
+    const folderParts = active.folder.split('/');
+    folderParts.forEach((part, i) => {
+      const prefixPath = folderParts.slice(0, i + 1).join('/');
+      const firstInFolder = all.find((f) => f.folder === prefixPath && !f.parent);
+      segs.push({ label: part, title: 'Folder · ' + prefixPath, id: firstInFolder?.id, current: false });
+    });
     ancestors.forEach((a) => segs.push({ label: a.title, title: a.file, id: a.id, current: false }));
     segs.push({ label: active.file, title: active.file, current: true });
     return segs;
   }, [active, all, fileOf]);
+
+  // secondary (split) pane — mirrors the primary doc's shape for EditorPane/PreviewPane
+  const secondary = {
+    id: state.secondaryId,
+    file: secondaryFile,
+    isMd: secondaryDoc.isMd,
+    isHtml: secondaryDoc.isHtml,
+    isEml: secondaryDoc.isEml,
+    sourceValue: secondaryDoc.sourceValue,
+    mdHtml: secondaryDoc.mdHtml,
+    emlData: secondaryDoc.emlData,
+    view: state.secondaryView,
+    sourceElRef: sourceElRef2,
+    previewElRef: previewElRef2,
+    onSourceInput: (e: ChangeEvent<HTMLTextAreaElement>) => {
+      const id = stateRef.current.secondaryId;
+      if (!id) return;
+      setSource(id, e.target.value);
+    },
+    onPreviewClick: onPreviewClickSecondary,
+  };
 
   return {
     state, setState, stateRef,
@@ -869,21 +1325,28 @@ export function useNotesApp(showRightSidebar = true) {
     findCount, replaceAllFn, findNextFn,
     suggestItems, suggestTitle, pickSuggest,
     canHistory, historyList: hist, snap, diffRows, saveSnapshot, restore,
-    recentDocs, recentlyCreated, tagCount, folders, pathSegments,
+    recentDocs, recentlyCreated, tagCount, folderTree, pathSegments,
+    pinnedFiles, pinnedFolderPaths,
     accent: ACCENT, accentSoft: ACCENT_SOFT,
     showRightSidebar,
     // refs
-    sourceElRef, previewElRef, paletteInputRef, captureInputRef,
+    sourceElRef, previewElRef, paletteInputRef, addTaskInputRef,
+    // split pane
+    secondary, openSplit, closeSplitPane,
     // actions
     open, closeTab, touch, setSource, setEml, aiGenerate, toggleTask, openOrCreate,
-    openCapture, closeCapture, saveCapture, ensureDaily, openDaily,
+    tasks, taskCounts,
+    openAddTask, closeAddTask, saveAddTask, addTaskLine, openTaskManager, ensureDaily, openDaily,
     currentExportHtml, exportPrint, exportDownload, exportDoc, exportCopyHtml,
     onPreviewClick, onSourceInput, scrollTo, selectInSource, selectPreviewTextInSource,
     openInBrowser,
     agoLabel,
-    childrenOf, newFile, duplicateFile, moveFileTo, toggleExpand, pickVaultRoot, refreshVault,
+    childrenOf, newFile, duplicateFile, moveFileTo, deleteFile, toggleExpand, pickVaultRoot, refreshVault,
     reorderNote, reorderFolder, depthOf, renameFile, collapseAllFolders, createFolder,
+    createCustomFilter, updateCustomFilter, deleteCustomFilter, openSmartFilterCreator, closeSmartFilterModal,
+    customFilterCounts, togglePinFile, togglePinFolder, revealFile, revealFolder,
     allFolderNames: state.folderOrder,
+    maxFolderDepth: MAX_FOLDER_DEPTH,
     isTauri: isTauri(),
     htmlToMd,
   };
