@@ -107,12 +107,12 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
               {VIEWS.map((v) => (
                 <span
                   key={v.k}
-                  onClick={() => setState({ view: v.k })}
+                  onClick={() => setState({ defaultView: v.k })}
                   style={{
                     padding: '5px 13px', borderRadius: 6, cursor: 'pointer',
-                    background: state.view === v.k ? 'var(--bg-surface)' : 'transparent',
-                    color: state.view === v.k ? 'var(--text-primary)' : 'var(--text-muted)',
-                    boxShadow: state.view === v.k ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
+                    background: state.defaultView === v.k ? 'var(--bg-surface)' : 'transparent',
+                    color: state.defaultView === v.k ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: state.defaultView === v.k ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
                   }}
                 >
                   {v.label}

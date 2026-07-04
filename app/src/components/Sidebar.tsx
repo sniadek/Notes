@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react';
-import type { FolderNode, NotesAppVM } from '../hooks/useNotesApp';
+import { VAULT_POLL_MS, type FolderNode, type NotesAppVM } from '../hooks/useNotesApp';
 import { TASK_MANAGER_ID } from '../lib/tasks';
 import type { NoteFile } from '../types';
+
+function SyncCountdown({ lastSyncedAt }: { lastSyncedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const remaining = Math.max(0, Math.ceil((lastSyncedAt + VAULT_POLL_MS - now) / 1000));
+  return <span> · next check in {remaining}s</span>;
+}
 
 const ACCENT_SOFT = 'var(--accent-soft)';
 
@@ -415,231 +425,240 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
     );
   }
 
-  return (
-    <div className="sc" style={{ width: 248, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', overflow: 'auto', flex: 'none', padding: '14px 10px' }}>
-      {cowork && (
-        <div
-          onClick={() => vm.newFile('Notes')}
-          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 11px', marginBottom: 6, borderRadius: 8, fontSize: 14.5, fontWeight: 500, color: 'var(--text-primary)', cursor: 'pointer' }}
-        >
-          <span style={{
-            width: 24, height: 24, borderRadius: '50%', background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flex: 'none',
-          }}
-          >
-            +
-          </span>
-          New note
-        </div>
-      )}
-      <div
-        onClick={vm.openTaskManager}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
-          padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
-          ...(state.activeId === TASK_MANAGER_ID ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
-        }}
-      >
-        <span style={{ width: 8, flex: 'none', fontSize: 12, display: 'flex', justifyContent: 'center' }}>☑</span>
-        <span style={{ flex: 1 }}>Tasks</span>
-        {vm.taskCounts > 0 && (
-          <span style={{ font: '600 10.5px -apple-system,system-ui', color: '#fff', background: '#c0524a', padding: '1px 6px', borderRadius: 9, flex: 'none' }}>
-            {vm.taskCounts}
-          </span>
-        )}
-      </div>
-      <div style={{ ...sectionLabelStyle(cowork), padding: cowork ? '4px 11px 8px' : '4px 11px 7px', cursor: 'default' }}>
-        <span>{cowork ? 'Smart filters' : 'SMART FILTERS'}</span>
-        <span
-          onClick={() => vm.openSmartFilterCreator()}
-          title="New smart filter"
-          style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 13 }}
-        >
-          +
-        </span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        {defs.map((f) => {
-          const on = state.filter === f.key;
-          return (
-            <div
-              key={f.key}
-              onClick={() => setState({ filter: f.key })}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
-                ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
-              }}
-            >
-              {f.star
-                ? <span style={{ color: '#d6a419', fontSize: 12, width: 8, display: 'flex', justifyContent: 'center' }}>★</span>
-                : cowork
-                  ? <span style={{ width: 8, flex: 'none', fontSize: 11, color: 'var(--text-faintest)' }}>○</span>
-                  : <span style={{ width: 8, height: 8, borderRadius: 2, flex: 'none', background: f.color, display: 'block' }} />}
-              <span style={{ flex: 1 }}>{f.label}</span>
-              <span style={{ fontSize: 11, color: on ? 'var(--accent-strong)' : 'var(--text-faintest)' }}>{f.count}</span>
-            </div>
-          );
-        })}
-        {state.customFilters.map((cf) => {
-          const key = 'custom:' + cf.id;
-          const on = state.filter === key;
-          const count = vm.customFilterCounts[cf.id] ?? 0;
-          return (
-            <div
-              key={cf.id}
-              onClick={() => setState({ filter: key })}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer', position: 'relative',
-                ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
-              }}
-            >
-              <span style={{ width: 8, height: 8, borderRadius: 2, flex: 'none', background: cf.color, display: 'block' }} />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cf.label}</span>
-              <span style={{ fontSize: 11, color: on ? 'var(--accent-strong)' : 'var(--text-faintest)' }}>{count}</span>
-              <span
-                onClick={(e) => { e.stopPropagation(); setFilterMenuOpenId((id) => (id === cf.id ? null : cf.id)); }}
-                style={{ color: 'var(--text-faintest)', fontSize: 12, padding: '0 2px', flex: 'none' }}
-                title="More"
-              >
-                ⋯
-              </span>
-              {filterMenuOpenId === cf.id && (
-                <div style={{ position: 'absolute', top: '100%', right: 8, marginTop: 2, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 120, zIndex: 5 }}>
-                  <div
-                    onClick={(e) => { e.stopPropagation(); vm.openSmartFilterCreator(cf.id); setFilterMenuOpenId(null); }}
-                    style={menuItemStyle}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    Edit
-                  </div>
-                  <div
-                    onClick={(e) => { e.stopPropagation(); vm.deleteCustomFilter(cf.id); setFilterMenuOpenId(null); }}
-                    style={menuItemStyle}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                  >
-                    Delete
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+  const showSyncCountdown = vm.isTauri && !!state.vaultRoot && !!state.lastSyncedAt;
 
-      <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:pinned')}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{pinnedExpanded ? '▾' : '▸'}</span>
-          {cowork ? 'Pinned' : 'PINNED'}
-        </span>
-      </div>
-      {pinnedExpanded && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {pinnedFolderPaths.map((p) => (
-            <PinnedFolderRow key={p} vm={vm} path={p} cowork={cowork} />
-          ))}
-          {pinnedFiles.map((f) => (
-            <RecentRow key={f.id} vm={vm} file={f} cowork={cowork} timestamp={undefined} />
-          ))}
-          {!pinnedFolderPaths.length && !pinnedFiles.length && (
-            <div style={{ padding: '4px 11px 10px', font: '400 12px -apple-system,system-ui', color: 'var(--text-faintest)' }}>
-              Nothing pinned yet
-            </div>
+  return (
+    <div style={{ width: 248, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', flex: 'none', display: 'flex', flexDirection: 'column' }}>
+      <div className="sc" style={{ overflow: 'auto', flex: 1, minHeight: 0, padding: '14px 10px' }}>
+        {cowork && (
+          <div
+            onClick={() => vm.newFile('Notes')}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 11px', marginBottom: 6, borderRadius: 8, fontSize: 14.5, fontWeight: 500, color: 'var(--text-primary)', cursor: 'pointer' }}
+          >
+            <span style={{
+              width: 24, height: 24, borderRadius: '50%', background: 'var(--bg-subtle)', color: 'var(--text-secondary)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flex: 'none',
+            }}
+            >
+              +
+            </span>
+            New note
+          </div>
+        )}
+        <div
+          onClick={vm.openTaskManager}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+            padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
+            ...(state.activeId === TASK_MANAGER_ID ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
+          }}
+        >
+          <span style={{ width: 8, flex: 'none', fontSize: 12, display: 'flex', justifyContent: 'center' }}>☑</span>
+          <span style={{ flex: 1 }}>Tasks</span>
+          {vm.taskCounts > 0 && (
+            <span style={{ font: '600 10.5px -apple-system,system-ui', color: '#fff', background: '#c0524a', padding: '1px 6px', borderRadius: 9, flex: 'none' }}>
+              {vm.taskCounts}
+            </span>
           )}
         </div>
-      )}
-
-      <div style={{ ...sectionLabelStyle(cowork), cursor: 'default' }}>
-        <span>{cowork ? 'Folders' : 'FOLDERS'}</span>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ ...sectionLabelStyle(cowork), padding: cowork ? '4px 11px 8px' : '4px 11px 7px', cursor: 'default' }}>
+          <span>{cowork ? 'Smart filters' : 'SMART FILTERS'}</span>
           <span
-            onClick={() => {
-              const name = window.prompt('Folder name:');
-              if (name) vm.createFolder(name);
-            }}
-            title="New folder"
+            onClick={() => vm.openSmartFilterCreator()}
+            title="New smart filter"
             style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 13 }}
           >
             +
           </span>
-          <span
-            onClick={() => vm.collapseAllFolders()}
-            title="Collapse all folders"
-            style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 12 }}
-          >
-            ⊟
-          </span>
-          <span
-            onClick={() => vm.refreshVault()}
-            title={vm.isTauri ? 'Refresh from disk' : 'Refresh'}
-            style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 12 }}
-          >
-            ↻
-          </span>
         </div>
-      </div>
-      {folderTree.map((node) => (
-        <FolderRow
-          key={node.path} vm={vm} node={node} depth={0} cowork={cowork}
-          dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone}
-          folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver}
-        />
-      ))}
-
-      <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:recent')}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{recentExpanded ? '▾' : '▸'}</span>
-          {cowork ? 'Recently edited' : 'RECENTLY EDITED'}
-        </span>
-      </div>
-      {recentExpanded && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {recentDocs.map((f) => (
-            <RecentRow key={f.id} vm={vm} file={f} cowork={cowork} timestamp={state.editedAt[f.id]} />
-          ))}
-        </div>
-      )}
-
-      <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:created')}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{createdExpanded ? '▾' : '▸'}</span>
-          {cowork ? 'Recently created' : 'RECENTLY CREATED'}
-        </span>
-      </div>
-      {createdExpanded && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {recentlyCreated.map((f) => (
-            <RecentRow key={f.id} vm={vm} file={f} cowork={cowork} timestamp={state.createdAt[f.id]} />
-          ))}
-        </div>
-      )}
-
-      <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:tags')}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{tagsExpanded ? '▾' : '▸'}</span>
-          {cowork ? 'Tags' : 'TAGS'}
-        </span>
-      </div>
-      {tagsExpanded && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 11px' }}>
-          {Object.keys(tagCount).sort().map((t) => {
-            const on = state.filter === 'tag:' + t;
+          {defs.map((f) => {
+            const on = state.filter === f.key;
             return (
-              <span
-                key={t}
-                onClick={() => setState({ filter: 'tag:' + t })}
+              <div
+                key={f.key}
+                onClick={() => setState({ filter: f.key })}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 4, font: cowork ? '500 12.5px -apple-system,system-ui' : '500 11px -apple-system,system-ui', padding: cowork ? '4px 10px' : '3px 9px', borderRadius: 11, cursor: 'pointer',
-                  ...(on ? { background: 'var(--accent-soft)', color: 'var(--accent-strong)' } : { background: 'var(--bg-subtle)', color: 'var(--text-muted)' }),
+                  display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
+                  ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
                 }}
               >
-                #{t}<span style={{ opacity: 0.6 }}>{tagCount[t]}</span>
-              </span>
+                {f.star
+                  ? <span style={{ color: '#d6a419', fontSize: 12, width: 8, display: 'flex', justifyContent: 'center' }}>★</span>
+                  : cowork
+                    ? <span style={{ width: 8, flex: 'none', fontSize: 11, color: 'var(--text-faintest)' }}>○</span>
+                    : <span style={{ width: 8, height: 8, borderRadius: 2, flex: 'none', background: f.color, display: 'block' }} />}
+                <span style={{ flex: 1 }}>{f.label}</span>
+                <span style={{ fontSize: 11, color: on ? 'var(--accent-strong)' : 'var(--text-faintest)' }}>{f.count}</span>
+              </div>
+            );
+          })}
+          {state.customFilters.map((cf) => {
+            const key = 'custom:' + cf.id;
+            const on = state.filter === key;
+            const count = vm.customFilterCounts[cf.id] ?? 0;
+            return (
+              <div
+                key={cf.id}
+                onClick={() => setState({ filter: key })}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer', position: 'relative',
+                  ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
+                }}
+              >
+                <span style={{ width: 8, height: 8, borderRadius: 2, flex: 'none', background: cf.color, display: 'block' }} />
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cf.label}</span>
+                <span style={{ fontSize: 11, color: on ? 'var(--accent-strong)' : 'var(--text-faintest)' }}>{count}</span>
+                <span
+                  onClick={(e) => { e.stopPropagation(); setFilterMenuOpenId((id) => (id === cf.id ? null : cf.id)); }}
+                  style={{ color: 'var(--text-faintest)', fontSize: 12, padding: '0 2px', flex: 'none' }}
+                  title="More"
+                >
+                  ⋯
+                </span>
+                {filterMenuOpenId === cf.id && (
+                  <div style={{ position: 'absolute', top: '100%', right: 8, marginTop: 2, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 14px -6px rgba(0,0,0,.2)', overflow: 'hidden', width: 120, zIndex: 5 }}>
+                    <div
+                      onClick={(e) => { e.stopPropagation(); vm.openSmartFilterCreator(cf.id); setFilterMenuOpenId(null); }}
+                      style={menuItemStyle}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      Edit
+                    </div>
+                    <div
+                      onClick={(e) => { e.stopPropagation(); vm.deleteCustomFilter(cf.id); setFilterMenuOpenId(null); }}
+                      style={menuItemStyle}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                    >
+                      Delete
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
-      )}
+  
+        <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:pinned')}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{pinnedExpanded ? '▾' : '▸'}</span>
+            {cowork ? 'Pinned' : 'PINNED'}
+          </span>
+        </div>
+        {pinnedExpanded && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {pinnedFolderPaths.map((p) => (
+              <PinnedFolderRow key={p} vm={vm} path={p} cowork={cowork} />
+            ))}
+            {pinnedFiles.map((f) => (
+              <RecentRow key={f.id} vm={vm} file={f} cowork={cowork} timestamp={undefined} />
+            ))}
+            {!pinnedFolderPaths.length && !pinnedFiles.length && (
+              <div style={{ padding: '4px 11px 10px', font: '400 12px -apple-system,system-ui', color: 'var(--text-faintest)' }}>
+                Nothing pinned yet
+              </div>
+            )}
+          </div>
+        )}
+  
+        <div style={{ ...sectionLabelStyle(cowork), cursor: 'default' }}>
+          <span>{cowork ? 'Folders' : 'FOLDERS'}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <span
+              onClick={() => {
+                const name = window.prompt('Folder name:');
+                if (name) vm.createFolder(name);
+              }}
+              title="New folder"
+              style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 13 }}
+            >
+              +
+            </span>
+            <span
+              onClick={() => vm.collapseAllFolders()}
+              title="Collapse all folders"
+              style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 12 }}
+            >
+              ⊟
+            </span>
+            <span
+              onClick={() => vm.refreshVault()}
+              title={vm.isTauri ? 'Refresh from disk' : 'Refresh'}
+              style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 12 }}
+            >
+              ↻
+            </span>
+          </div>
+        </div>
+        {folderTree.map((node) => (
+          <FolderRow
+            key={node.path} vm={vm} node={node} depth={0} cowork={cowork}
+            dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone}
+            folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver}
+          />
+        ))}
+  
+        <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:recent')}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{recentExpanded ? '▾' : '▸'}</span>
+            {cowork ? 'Recently edited' : 'RECENTLY EDITED'}
+          </span>
+        </div>
+        {recentExpanded && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {recentDocs.map((f) => (
+              <RecentRow key={f.id} vm={vm} file={f} cowork={cowork} timestamp={state.editedAt[f.id]} />
+            ))}
+          </div>
+        )}
+  
+        <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:created')}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{createdExpanded ? '▾' : '▸'}</span>
+            {cowork ? 'Recently created' : 'RECENTLY CREATED'}
+          </span>
+        </div>
+        {createdExpanded && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {recentlyCreated.map((f) => (
+              <RecentRow key={f.id} vm={vm} file={f} cowork={cowork} timestamp={state.createdAt[f.id]} />
+            ))}
+          </div>
+        )}
+  
+        <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:tags')}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{tagsExpanded ? '▾' : '▸'}</span>
+            {cowork ? 'Tags' : 'TAGS'}
+          </span>
+        </div>
+        {tagsExpanded && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '0 11px' }}>
+            {Object.keys(tagCount).sort().map((t) => {
+              const on = state.filter === 'tag:' + t;
+              return (
+                <span
+                  key={t}
+                  onClick={() => setState({ filter: 'tag:' + t })}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4, font: cowork ? '500 12.5px -apple-system,system-ui' : '500 11px -apple-system,system-ui', padding: cowork ? '4px 10px' : '3px 9px', borderRadius: 11, cursor: 'pointer',
+                    ...(on ? { background: 'var(--accent-soft)', color: 'var(--accent-strong)' } : { background: 'var(--bg-subtle)', color: 'var(--text-muted)' }),
+                  }}
+                >
+                  #{t}<span style={{ opacity: 0.6 }}>{tagCount[t]}</span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: '#1a8a4f' }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#28b463' }} />
+        Synced
+        {showSyncCountdown && <SyncCountdown lastSyncedAt={state.lastSyncedAt!} />}
+      </div>
     </div>
   );
 }

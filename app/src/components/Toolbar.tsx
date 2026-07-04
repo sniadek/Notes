@@ -47,6 +47,21 @@ function isTauri(): boolean {
   return '__TAURI_INTERNALS__' in window;
 }
 
+const TRACKER_URL = 'http://localhost:8080';
+
+async function openTracker() {
+  try {
+    if (isTauri()) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(TRACKER_URL);
+    } else {
+      window.open(TRACKER_URL, '_blank');
+    }
+  } catch (err) {
+    console.error('Failed to open task tracker:', err);
+  }
+}
+
 async function windowControl(action: 'close' | 'minimize' | 'toggleMaximize') {
   if (!isTauri()) return;
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -81,6 +96,10 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
     { k: 'preview', label: 'preview' },
   ];
   const railOn = !state.railHidden && vm.showRightSidebar && !!active;
+  // The edit/split/preview toggle has no effect on a PDF (always preview-only), so hide it
+  // when the focused tab (whichever one Toolbar controls) is one.
+  const focusedFile = (state.secondaryFocused && vm.secondary.file) ? vm.secondary.file : active;
+  const showViewToggle = focusedFile?.type !== 'pdf';
 
   return (
     <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: 'var(--bg-bar)', borderBottom: '1px solid var(--border)', flex: 'none', padding: '0 16px', gap: 14 }}>
@@ -111,14 +130,15 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
       <WorldClock />
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
+        {showViewToggle && (
         <div style={{ display: 'flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 2, font: '500 11.5px ui-monospace,Menlo,monospace' }}>
           {views.map((v) => (
             <span
               key={v.k}
-              onClick={() => setState({ view: v.k })}
+              onClick={() => vm.setView(v.k)}
               style={{
                 padding: '4px 11px', borderRadius: 6, cursor: 'pointer',
-                ...(state.view === v.k
+                ...(vm.currentView === v.k
                   ? { background: 'var(--bg-surface)', color: 'var(--text-primary)', boxShadow: '0 1px 2px rgba(0,0,0,.1)' }
                   : { color: 'var(--text-muted)' }),
               }}
@@ -127,7 +147,9 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
             </span>
           ))}
         </div>
+        )}
         <IconBtn title="Add task (⌘⇧N)" onClick={vm.openAddTask} style={{ fontSize: 15 }}>☑</IconBtn>
+        <IconBtn title="Open task tracker" onClick={openTracker} style={{ fontSize: 15 }}>⧉</IconBtn>
         <IconBtn title="Graph view (⌘G)" onClick={() => setState({ graphOpen: true })}>⬡</IconBtn>
         <IconBtn
           title="Toggle right sidebar (⌘⇧\)"

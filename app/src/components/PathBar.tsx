@@ -14,7 +14,8 @@ export default function PathBar({ vm, pane = 'primary' }: { vm: NotesAppVM; pane
   const exportOpen = secondary ? state.exportOpenSecondary : state.exportOpen;
   const setExportOpen = (open: boolean) => setState(secondary ? { exportOpenSecondary: open } : { exportOpen: open });
 
-  const exportItems = file ? [
+  const canExport = !!file && file.type !== 'pdf';
+  const exportItems = canExport ? [
     { icon: '⎙', label: 'Print / Save as PDF', onClick: () => { setExportOpen(false); vm.exportPrint(targetId); } },
     { icon: '↓', label: 'Download ' + (isHtml ? '.html' : isEml ? '.eml' : '.md'), onClick: () => { setExportOpen(false); vm.exportDownload(targetId); } },
     { icon: 'W', label: 'Download Word .doc', onClick: () => { setExportOpen(false); vm.exportDoc(targetId); } },
@@ -63,32 +64,34 @@ export default function PathBar({ vm, pane = 'primary' }: { vm: NotesAppVM; pane
             ⟲ History
           </span>
         )}
-        <div style={{ position: 'relative' }}>
-          <span
-            onClick={() => setExportOpen(!exportOpen)}
-            title="Export"
-            style={{ display: 'flex', alignItems: 'center', gap: 5, font: '500 11px -apple-system,system-ui', color: 'var(--text-muted)', padding: '3px 9px', borderRadius: 7, cursor: 'pointer' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-          >
-            ⤓ Export
-          </span>
-          {exportOpen && (
-            <div style={{ position: 'absolute', top: 28, right: 0, zIndex: 30, width: 210, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 16px 44px -12px rgba(0,0,0,.3)', overflow: 'hidden', animation: 'pop .1s ease', padding: 5 }}>
-              {exportItems.map((x) => (
-                <div
-                  key={x.label}
-                  onClick={x.onClick}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 7, cursor: 'pointer', font: '13px -apple-system,system-ui', color: 'var(--text-primary)' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                >
-                  <span style={{ width: 16, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>{x.icon}</span>{x.label}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        {canExport && (
+          <div style={{ position: 'relative' }}>
+            <span
+              onClick={() => setExportOpen(!exportOpen)}
+              title="Export"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, font: '500 11px -apple-system,system-ui', color: 'var(--text-muted)', padding: '3px 9px', borderRadius: 7, cursor: 'pointer' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              ⤓ Export
+            </span>
+            {exportOpen && (
+              <div style={{ position: 'absolute', top: 28, right: 0, zIndex: 30, width: 210, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 16px 44px -12px rgba(0,0,0,.3)', overflow: 'hidden', animation: 'pop .1s ease', padding: 5 }}>
+                {exportItems.map((x) => (
+                  <div
+                    key={x.label}
+                    onClick={x.onClick}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 11px', borderRadius: 7, cursor: 'pointer', font: '13px -apple-system,system-ui', color: 'var(--text-primary)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ width: 16, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>{x.icon}</span>{x.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

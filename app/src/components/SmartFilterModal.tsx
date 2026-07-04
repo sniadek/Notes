@@ -130,6 +130,7 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
                     <option value="md">Markdown</option>
                     <option value="html">HTML</option>
                     <option value="eml">Email</option>
+                    <option value="pdf">PDF</option>
                   </select>
                 )}
                 {rule.field === 'pinned' && (

@@ -1,11 +1,10 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NotesAppVM } from '../hooks/useNotesApp';
-import type { DocFontSize, HtmlWidth } from '../types';
+import type { HtmlWidth } from '../types';
+import { FONT_SCALES } from '../lib/utils';
+import { assetUrl } from '../lib/tauriFs';
 
 const WIDTHS: Record<HtmlWidth, string> = { desktop: '100%', tablet: '768px', mobile: '390px' };
-const FONT_SCALES: Record<DocFontSize, number> = {
-  small: 0.9, medium: 1, large: 1.15, xlarge: 1.3,
-};
 
 export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; pane?: 'primary' | 'secondary' }) {
   const { state, setState } = vm;
@@ -13,16 +12,24 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
   const doc = secondary
     ? vm.secondary
     : {
-        id: vm.active?.id ?? null, file: vm.active, isMd: vm.isMd, isHtml: vm.isHtml, isEml: vm.isEml,
+        id: vm.active?.id ?? null, file: vm.active, isMd: vm.isMd, isHtml: vm.isHtml, isEml: vm.isEml, isPdf: vm.isPdf,
         sourceValue: vm.sourceValue, mdHtml: vm.mdHtml, emlData: vm.emlData,
         previewElRef: vm.previewElRef, onPreviewClick: vm.onPreviewClick,
       };
-  const { isMd, isHtml, isEml, sourceValue, mdHtml, emlData, file } = doc;
+  const { isMd, isHtml, isEml, isPdf, sourceValue, mdHtml, emlData, file } = doc;
   const htmlFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [pdfSrc, setPdfSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isPdf || !vm.isTauri || !file?.path) { setPdfSrc(null); return; }
+    let cancelled = false;
+    assetUrl(file.path).then((url) => { if (!cancelled) setPdfSrc(url); });
+    return () => { cancelled = true; };
+  }, [isPdf, vm.isTauri, file?.path]);
 
   const paneStyle = {
     flex: 1, minWidth: 0, overflow: 'auto',
-    padding: isHtml ? '0' : '40px 44px',
+    padding: isHtml || isPdf ? '0' : '40px 44px',
     background: isEml ? 'var(--bg-canvas)' : 'var(--bg-surface)',
   } as const;
 
@@ -43,8 +50,8 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
             if (!file) return;
             vm.setSource(file.id, vm.htmlToMd(e.currentTarget.innerHTML));
           }}
-          onMouseUp={() => !secondary && vm.selectPreviewTextInSource(window.getSelection()?.toString() || '')}
-          onKeyUp={() => !secondary && vm.selectPreviewTextInSource(window.getSelection()?.toString() || '')}
+          onMouseUp={() => vm.selectPreviewTextInSource(window.getSelection()?.toString() || '', pane)}
+          onKeyUp={() => vm.selectPreviewTextInSource(window.getSelection()?.toString() || '', pane)}
           dangerouslySetInnerHTML={{ __html: mdHtml }}
         />
       </div>
@@ -98,10 +105,14 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
                 iframeDoc.addEventListener('focusout', () => {
                   vm.setSource(id, '<!doctype html>\n' + iframeDoc.documentElement.outerHTML);
                 });
-                if (!secondary) {
-                  const onSelect = () => vm.selectPreviewTextInSource(iframeDoc.getSelection()?.toString() || '');
-                  iframeDoc.addEventListener('mouseup', onSelect);
-                  iframeDoc.addEventListener('keyup', onSelect);
+                const onSelect = () => vm.selectPreviewTextInSource(iframeDoc.getSelection()?.toString() || '', pane);
+                iframeDoc.addEventListener('mouseup', onSelect);
+                iframeDoc.addEventListener('keyup', onSelect);
+                if (secondary) {
+                  // Clicks inside this iframe never bubble to the parent document, so the
+                  // column wrapper's onMouseDown can't catch focus/highlight changes — do it
+                  // explicitly here, the same way clicking its tab would.
+                  iframeDoc.addEventListener('mousedown', () => vm.open(id));
                 }
               }}
               style={{ width: WIDTHS[state.htmlWidth], maxWidth: '100%', height: '100%', minHeight: 520, border: '1px solid rgba(0,0,0,.12)', borderRadius: 10, background: '#fff', boxShadow: '0 6px 24px -10px rgba(0,0,0,.2)' }}
@@ -120,6 +131,20 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
     return (
       <div className="sc" style={paneStyle}>
         <div ref={doc.previewElRef} dangerouslySetInnerHTML={{ __html: card }} />
+      </div>
+    );
+  }
+
+  if (isPdf) {
+    return (
+      <div className="sc" style={paneStyle}>
+        {pdfSrc ? (
+          <iframe key={file?.id} src={pdfSrc} title="pdf preview" style={{ width: '100%', height: '100%', border: 'none' }} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-faint)', font: '13px -apple-system,system-ui' }}>
+            PDF preview requires a connected vault.
+          </div>
+        )}
       </div>
     );
   }

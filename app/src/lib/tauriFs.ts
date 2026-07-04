@@ -22,6 +22,13 @@ export async function readFile(path: string): Promise<string> {
   return invoke<string>('read_file', { path });
 }
 
+// Points directly at a file on disk via Tauri's asset protocol, instead of reading its bytes
+// into JS — used for PDFs, which can't be read as UTF-8 text like the other file types.
+export async function assetUrl(path: string): Promise<string> {
+  const { convertFileSrc } = await import('@tauri-apps/api/core');
+  return convertFileSrc(path);
+}
+
 export async function writeFile(path: string, contents: string): Promise<void> {
   if (!isTauri()) return;
   const { invoke } = await import('@tauri-apps/api/core');

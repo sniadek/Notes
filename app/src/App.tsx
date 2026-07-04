@@ -25,8 +25,6 @@ export default function App() {
   const railVisible = !vm.state.railHidden && vm.showRightSidebar && !!vm.active;
   const cowork = vm.state.design === 'cowork' || vm.state.design === 'cowork-plus';
   const hasSplit = !!vm.secondary.file;
-  const secondaryShowSource = hasSplit && (vm.secondary.view === 'edit' || vm.secondary.view === 'split');
-  const secondaryShowPreview = hasSplit && (vm.secondary.view === 'preview' || vm.secondary.view === 'split');
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>
@@ -43,10 +41,21 @@ export default function App() {
           {vm.state.activeId === TASK_MANAGER_ID
             ? <TaskManagerPane vm={vm} />
             : vm.active
-              ? (
+              ? (() => {
+                // Focus (secondaryFocused) no longer gates which pane can show editable source —
+                // each pane renders purely from its own stored view mode (showSource/showPreview,
+                // both already per-tab), so both can be independently in edit/split/preview at
+                // once. Focus still decides which tab is bold in the tab bar and which one the
+                // Toolbar's edit/split/preview buttons, Cmd+E, and Find & Replace act on.
+                const secondaryFocused = hasSplit && vm.state.secondaryFocused;
+                return (
                 <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-                  {/* Primary (editor) column — its own breadcrumb + panes + status bar */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  {/* Primary column — its own breadcrumb + panes + status bar. Interacting here
+                      (while paired) moves the tab bar's highlight back to the primary tab. */}
+                  <div
+                    onMouseDown={() => { if (secondaryFocused) vm.setState({ secondaryFocused: false }); }}
+                    style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}
+                  >
                     <PathBar vm={vm} />
                     <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
                       {vm.showSource && <EditorPane vm={vm} />}
@@ -55,22 +64,28 @@ export default function App() {
                     <StatusBar vm={vm} />
                   </div>
 
-                  {/* Split (secondary) column — mirrors the primary column, own breadcrumb + status bar */}
+                  {/* Split (secondary) column — the linked partner file, permanently pinned to
+                      the right, independently editable per its own mode. Interacting here moves
+                      the tab bar's highlight (and Toolbar/Cmd+E/Find & Replace target) to it. */}
                   {hasSplit && (
                     <>
                       <div style={{ width: 1, background: 'var(--border)', flex: 'none' }} />
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                      <div
+                        onMouseDown={() => { if (!secondaryFocused) vm.setState({ secondaryFocused: true }); }}
+                        style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}
+                      >
                         <PathBar vm={vm} pane="secondary" />
                         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-                          {secondaryShowSource && <EditorPane vm={vm} pane="secondary" />}
-                          {secondaryShowPreview && <PreviewPane vm={vm} pane="secondary" />}
+                          {vm.secondary.showSource && <EditorPane vm={vm} pane="secondary" />}
+                          {vm.secondary.showPreview && <PreviewPane vm={vm} pane="secondary" />}
                         </div>
                         <StatusBar vm={vm} pane="secondary" />
                       </div>
                     </>
                   )}
                 </div>
-              )
+                );
+              })()
               : (
                 <div
                   style={{
