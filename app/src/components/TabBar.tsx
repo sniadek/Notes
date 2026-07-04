@@ -26,6 +26,12 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
   const [splitSearch, setSplitSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
+  // "All open tabs" panel — same portal-to-<body> approach as the per-tab "⋯" menu, for the
+  // same overflow-clipping reason.
+  const [tabListAnchor, setTabListAnchor] = useState<{ left: number; top: number } | null>(null);
+  const [tabListQuery, setTabListQuery] = useState('');
+  const tabListInputRef = useRef<HTMLInputElement | null>(null);
+
   // Drag-to-reorder — mirrors the sidebar's own drag state pattern (Sidebar.tsx's FileRow),
   // but zones are left/right (before/after) since tabs are a flat horizontal strip, not a tree.
   const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -37,6 +43,13 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
       setTimeout(() => { try { searchInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
     }
   }, [menu]);
+
+  useEffect(() => {
+    if (tabListAnchor) {
+      setTabListQuery('');
+      setTimeout(() => { try { tabListInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
+    }
+  }, [tabListAnchor]);
 
   const panedSplit = !!state.secondaryId;
   const menuFile = menu ? fileOf(menu.id) : undefined;
@@ -51,6 +64,14 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
       ? vm.all.filter((f) => f.id !== menu.id && (f.title.toLowerCase().includes(q) || f.file.toLowerCase().includes(q))).slice(0, 8)
       : state.openTabs.filter((t) => t !== menu.id).map((t) => fileOf(t)).filter((f): f is NonNullable<typeof f> => !!f))
     : [];
+
+  const tq = tabListQuery.trim().toLowerCase();
+  const openTabFiles = state.openTabs
+    .map((id) => ({ id, f: fileOf(id) }))
+    .filter((x): x is { id: string; f: NonNullable<typeof x.f> } => !!x.f);
+  const tabListResults = tq
+    ? openTabFiles.filter(({ f }) => f.title.toLowerCase().includes(tq) || f.file.toLowerCase().includes(tq))
+    : openTabFiles;
 
   return (
     <div className="sc" style={{ display: 'flex', alignItems: 'stretch', height: 40, background: 'var(--bg-tab)', borderBottom: '1px solid var(--border)', flex: 'none', overflowX: 'auto' }}>
@@ -163,6 +184,18 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
         );
       })}
       <div
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setTabListAnchor((a) => (a ? null : { left: rect.right - 280, top: rect.bottom }));
+        }}
+        title="All open tabs"
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer', flex: 'none' }}
+        onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
+      >
+        ▾
+      </div>
+      <div
         onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
         title="Open file (⌘K)"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, color: 'var(--text-tertiary)', fontSize: 16, cursor: 'pointer', flex: 'none' }}
@@ -227,6 +260,72 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
                 Unlink split
               </div>
             )}
+          </div>
+        </>,
+        document.body,
+      )}
+
+      {tabListAnchor && createPortal(
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 29 }} onClick={() => setTabListAnchor(null)} />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'fixed', top: tabListAnchor.top, left: tabListAnchor.left, zIndex: 30, width: 280, maxHeight: 380, display: 'flex', flexDirection: 'column',
+              background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, boxShadow: '0 16px 44px -12px rgba(0,0,0,.3)', overflow: 'hidden', animation: 'pop .1s ease',
+            }}
+          >
+            <div style={{ padding: '8px 9px 6px', flex: 'none' }}>
+              <div style={{ font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em', padding: '0 3px 6px' }}>OPEN TABS</div>
+              <input
+                ref={tabListInputRef}
+                value={tabListQuery}
+                onChange={(e) => setTabListQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setTabListAnchor(null);
+                  else if (e.key === 'Enter' && tabListResults[0]) { vm.open(tabListResults[0].id); setTabListAnchor(null); }
+                }}
+                placeholder="Search open tabs…"
+                style={{
+                  width: '100%', boxSizing: 'border-box', padding: '5px 8px', border: '1px solid var(--border)', borderRadius: 6,
+                  font: '12.5px -apple-system,system-ui', color: 'var(--text-primary)', background: 'var(--bg-subtle)', outline: 'none',
+                }}
+              />
+            </div>
+            <div className="sc" style={{ overflow: 'auto', padding: '0 5px 5px' }}>
+              {tabListResults.length === 0 && (
+                <div style={{ padding: '6px 9px 8px', font: '12.5px -apple-system,system-ui', color: 'var(--text-faintest)' }}>
+                  {tq ? 'No matching tabs' : 'No open tabs'}
+                </div>
+              )}
+              {tabListResults.map(({ id, f }) => {
+                const on = id === state.activeId || id === state.secondaryId;
+                const tbc = badgeColors[f.type];
+                return (
+                  <div
+                    key={id}
+                    onClick={() => { vm.open(id); setTabListAnchor(null); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 9px', borderRadius: 7, cursor: 'pointer', font: '12.5px -apple-system,system-ui',
+                      ...(on ? { background: 'var(--accent-soft)', color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-primary)' }),
+                    }}
+                    onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = 'var(--hover)'; }}
+                    onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = 'transparent'; }}
+                  >
+                    <span style={{ font: '600 8px ui-monospace,Menlo,monospace', padding: '1px 3px', borderRadius: 3, color: tbc.c, background: tbc.b, flex: 'none' }}>{f.type.toUpperCase()}</span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.file}</span>
+                    <span
+                      onClick={(e) => { e.stopPropagation(); closeTab(id); }}
+                      style={{ color: 'var(--text-faint)', fontSize: 13, width: 16, height: 16, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4 }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-faint)'; }}
+                    >
+                      ×
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </>,
         document.body,
