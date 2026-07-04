@@ -30,16 +30,16 @@ export function parseFront(md: string): FrontMatter {
 export function inline(s: string, wiki: boolean): string {
   s = esc(s);
   s = s.replace(/\$([^$\n]+)\$/g, (_m, tex) => '<span data-tex="' + tex.replace(/"/g, '&quot;') + '">' + tex + '</span>');
-  s = s.replace(/`([^`]+)`/g, '<code style="font:13px ui-monospace,Menlo,monospace;background:#f0ede6;padding:1px 6px;border-radius:4px;color:#403d37">$1</code>');
-  if (wiki) s = s.replace(/\[\[([^\]]+)\]\]/g, '<span data-wiki="$1" style="color:oklch(0.5 0.12 264);border-bottom:1.5px solid oklch(0.82 0.08 264);font-weight:500;cursor:pointer">$1</span>');
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700;color:#26241f">$1</strong>');
+  s = s.replace(/`([^`]+)`/g, '<code style="font:13px ui-monospace,Menlo,monospace;background:var(--bg-subtle);padding:1px 6px;border-radius:4px;color:var(--text-secondary)">$1</code>');
+  if (wiki) s = s.replace(/\[\[([^\]]+)\]\]/g, '<span data-wiki="$1" style="color:var(--accent);border-bottom:1.5px solid var(--accent-soft);font-weight:500;cursor:pointer">$1</span>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700;color:var(--text-primary)">$1</strong>');
   return s;
 }
 
 export function highlight(code: string): string {
   const re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(const|let|var|function|return|if|else|for|while|import|from|export|class|new|await|async|GET|POST|PUT|DELETE|PATCH|true|false|null)\b|\b(\d+(?:\.\d+)?)\b/g;
   return esc(code).replace(re, (m, com, str, kw, num) =>
-    com ? '<span style="color:#a8a29a">' + com + '</span>'
+    com ? '<span style="color:var(--text-tertiary)">' + com + '</span>'
       : str ? '<span style="color:#1a8a4f">' + str + '</span>'
       : kw ? '<span style="color:oklch(0.5 0.16 295);font-weight:600">' + kw + '</span>'
       : num ? '<span style="color:#b5651d">' + num + '</span>'
@@ -73,11 +73,11 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
         if (lang === 'mermaid') {
           const mid = idPrefix + 'mmd' + (mmdN++);
           mermaidBlocks[mid] = code.join('\n');
-          html += '<div class="mmd" data-mmd="' + mid + '" style="border:1px solid rgba(0,0,0,.07);border-radius:9px;padding:18px;margin:0 0 18px;background:#faf8f3;overflow:auto;text-align:center;color:#a8a29a;font:12px ui-monospace,Menlo,monospace">◇ rendering diagram…</div>';
+          html += '<div class="mmd" data-mmd="' + mid + '" style="border:1px solid var(--border);border-radius:9px;padding:18px;margin:0 0 18px;background:var(--bg-subtle);overflow:auto;text-align:center;color:var(--text-tertiary);font:12px ui-monospace,Menlo,monospace">◇ rendering diagram…</div>';
         } else {
           const id = idPrefix + 'cb' + (cbN++);
           codeBlocks[id] = code.join('\n');
-          html += '<div style="border:1px solid rgba(0,0,0,.07);border-radius:9px;overflow:hidden;margin:0 0 18px;background:#faf8f3"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid rgba(0,0,0,.06);font:11px ui-monospace,Menlo,monospace;color:#a8a29a"><span>' + (lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:oklch(0.5 0.1 264)">Copy</span></div><pre style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:#26241f;overflow:auto">' + highlight(code.join('\n')) + '</pre></div>';
+          html += '<div style="border:1px solid var(--border);border-radius:9px;overflow:hidden;margin:0 0 18px;background:var(--bg-subtle)"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font:11px ui-monospace,Menlo,monospace;color:var(--text-tertiary)"><span>' + (lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:var(--accent)">Copy</span></div><pre style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:var(--text-primary);overflow:auto">' + highlight(code.join('\n')) + '</pre></div>';
         }
         code = []; inCode = false; lang = '';
       } else { close(); inCode = true; lang = line.trim().slice(3); }
@@ -88,24 +88,24 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
       close();
       const done = /\[x\]/i.test(line);
       const text = line.replace(/^-\s\[( |x)\]\s/i, '');
-      html += '<div data-task="' + (i + taskOffset) + '" style="display:flex;align-items:flex-start;gap:9px;font:400 15.5px/1.6 -apple-system,system-ui;margin:0 0 5px;cursor:pointer"><span style="width:17px;height:17px;margin-top:3px;border-radius:5px;border:1.5px solid ' + (done ? 'oklch(0.5 0.12 264)' : '#cfc9bd') + ';background:' + (done ? 'oklch(0.5 0.12 264)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;flex:none">' + (done ? '✓' : '') + '</span><span style="' + (done ? 'color:#a8a29a;text-decoration:line-through' : 'color:#403d37') + '">' + inline(text, wiki) + '</span></div>';
+      html += '<div data-task="' + (i + taskOffset) + '" style="display:flex;align-items:flex-start;gap:9px;font:400 15.5px/1.6 -apple-system,system-ui;margin:0 0 5px;cursor:pointer"><span style="width:17px;height:17px;margin-top:3px;border-radius:5px;border:1.5px solid ' + (done ? 'var(--accent)' : 'var(--border)') + ';background:' + (done ? 'var(--accent)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;flex:none">' + (done ? '✓' : '') + '</span><span style="' + (done ? 'color:var(--text-tertiary);text-decoration:line-through' : 'color:var(--text-secondary)') + '">' + inline(text, wiki) + '</span></div>';
     } else if (line.startsWith('### ')) {
       close(); const t = line.slice(4);
-      html += '<h3 id="' + slug(t) + '" style="font:600 16px -apple-system,system-ui;color:#26241f;margin:22px 0 8px">' + inline(t, wiki) + '</h3>';
+      html += '<h3 id="' + slug(t) + '" style="font:600 16px -apple-system,system-ui;color:var(--text-primary);margin:22px 0 8px">' + inline(t, wiki) + '</h3>';
     } else if (line.startsWith('## ')) {
       close(); const t = line.slice(3);
-      html += '<h2 id="' + slug(t) + '" style="font:600 20px -apple-system,system-ui;color:#26241f;margin:28px 0 12px">' + inline(t, wiki) + '</h2>';
+      html += '<h2 id="' + slug(t) + '" style="font:600 20px -apple-system,system-ui;color:var(--text-primary);margin:28px 0 12px">' + inline(t, wiki) + '</h2>';
     } else if (line.startsWith('# ')) {
       close(); const t = line.slice(2);
-      html += '<h1 id="' + slug(t) + '" style="font:700 30px/1.2 -apple-system,system-ui;color:#26241f;margin:0 0 14px;letter-spacing:-.012em">' + inline(t, wiki) + '</h1>';
+      html += '<h1 id="' + slug(t) + '" style="font:700 30px/1.2 -apple-system,system-ui;color:var(--text-primary);margin:0 0 14px;letter-spacing:-.012em">' + inline(t, wiki) + '</h1>';
     } else if (/^>\s/.test(line)) {
       close();
-      html += '<blockquote style="border-left:3px solid oklch(0.8 0.07 264);padding:2px 0 2px 14px;margin:0 0 16px;color:#6a675f;font:400 15.5px/1.7 -apple-system,system-ui">' + inline(line.slice(2), wiki) + '</blockquote>';
+      html += '<blockquote style="border-left:3px solid var(--accent-soft);padding:2px 0 2px 14px;margin:0 0 16px;color:var(--text-secondary);font:400 15.5px/1.7 -apple-system,system-ui">' + inline(line.slice(2), wiki) + '</blockquote>';
     } else if (/^\d+\.\s/.test(line)) {
       close();
-      html += '<div style="font:400 15.5px/1.75 -apple-system,system-ui;color:#403d37;margin:0 0 6px">' + inline(line, wiki) + '</div>';
+      html += '<div style="font:400 15.5px/1.75 -apple-system,system-ui;color:var(--text-secondary);margin:0 0 6px">' + inline(line, wiki) + '</div>';
     } else if (/^[-*]\s/.test(line)) {
-      if (!inList) { html += '<ul style="font:400 15.5px/1.85 -apple-system,system-ui;color:#403d37;margin:0 0 16px;padding-left:22px">'; inList = true; }
+      if (!inList) { html += '<ul style="font:400 15.5px/1.85 -apple-system,system-ui;color:var(--text-secondary);margin:0 0 16px;padding-left:22px">'; inList = true; }
       html += '<li style="margin-bottom:4px">' + inline(line.slice(2), wiki) + '</li>';
     } else if (
       /^\|.*\|\s*$/.test(line.trim()) &&
@@ -130,8 +130,8 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
       }
       i--;
       const cellStyle = (align: string, head: boolean) =>
-        'text-align:' + align + ';padding:8px 12px;border:1px solid rgba(0,0,0,.1);' +
-        (head ? 'background:#f5f2ea;font-weight:600;color:#26241f' : 'color:#403d37');
+        'text-align:' + align + ';padding:8px 12px;border:1px solid var(--border);' +
+        (head ? 'background:var(--bg-subtle);font-weight:600;color:var(--text-primary)' : 'color:var(--text-secondary)');
       html += '<table style="border-collapse:collapse;width:100%;margin:0 0 18px;font:400 14.5px/1.6 -apple-system,system-ui">' +
         '<thead><tr>' + headerCells.map((c, ci) => '<th style="' + cellStyle(aligns[ci] || 'left', true) + '">' + inline(c, wiki) + '</th>').join('') + '</tr></thead>' +
         '<tbody>' + bodyRows.map((row) => '<tr>' + row.map((c, ci) => '<td style="' + cellStyle(aligns[ci] || 'left', false) + '">' + inline(c, wiki) + '</td>').join('') + '</tr>').join('') + '</tbody>' +
@@ -140,7 +140,7 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
       close();
     } else {
       close();
-      html += '<p style="font:400 15.5px/1.75 -apple-system,system-ui;color:#403d37;margin:0 0 16px">' + inline(line, wiki) + '</p>';
+      html += '<p style="font:400 15.5px/1.75 -apple-system,system-ui;color:var(--text-secondary);margin:0 0 16px">' + inline(line, wiki) + '</p>';
     }
   }
   close();

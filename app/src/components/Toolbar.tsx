@@ -47,6 +47,21 @@ function isTauri(): boolean {
   return '__TAURI_INTERNALS__' in window;
 }
 
+const TRACKER_URL = 'http://localhost:8080';
+
+async function openTracker() {
+  try {
+    if (isTauri()) {
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(TRACKER_URL);
+    } else {
+      window.open(TRACKER_URL, '_blank');
+    }
+  } catch (err) {
+    console.error('Failed to open task tracker:', err);
+  }
+}
+
 async function windowControl(action: 'close' | 'minimize' | 'toggleMaximize') {
   if (!isTauri()) return;
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -65,7 +80,7 @@ function IconBtn({ title, onClick, children, style }: { title: string; onClick: 
       onClick={onClick}
       title={title}
       style={{ ...iconBtnStyle, color: 'var(--text-muted)', fontSize: 16, ...style }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = '#efece6'; }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = style?.background as string || 'transparent'; }}
     >
       {children}
@@ -81,9 +96,13 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
     { k: 'preview', label: 'preview' },
   ];
   const railOn = !state.railHidden && vm.showRightSidebar && !!active;
+  // The edit/split/preview toggle has no effect on a PDF (always preview-only), so hide it
+  // when the focused tab (whichever one Toolbar controls) is one.
+  const focusedFile = (state.secondaryFocused && vm.secondary.file) ? vm.secondary.file : active;
+  const showViewToggle = focusedFile?.type !== 'pdf';
 
   return (
-    <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: '#faf9f7', borderBottom: '1px solid rgba(0,0,0,.08)', flex: 'none', padding: '0 16px', gap: 14 }}>
+    <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: 'var(--bg-bar)', borderBottom: '1px solid var(--border)', flex: 'none', padding: '0 16px', gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
         <span onClick={() => windowControl('close')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57', cursor: 'pointer' }} />
         <span onClick={() => windowControl('minimize')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e', cursor: 'pointer' }} />
@@ -100,7 +119,7 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
       <div
         onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
         style={{ flex: 1, minWidth: 0, maxWidth: 440, height: 30, borderRadius: 8, background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 9, color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'text', overflow: 'hidden' }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#ebe8e1'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; }}
       >
         <span style={{ fontSize: 13, flex: 'none' }}>⌕</span>
@@ -111,14 +130,15 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
       <WorldClock />
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
+        {showViewToggle && (
         <div style={{ display: 'flex', background: 'var(--bg-subtle)', borderRadius: 8, padding: 2, font: '500 11.5px ui-monospace,Menlo,monospace' }}>
           {views.map((v) => (
             <span
               key={v.k}
-              onClick={() => setState({ view: v.k })}
+              onClick={() => vm.setView(v.k)}
               style={{
                 padding: '4px 11px', borderRadius: 6, cursor: 'pointer',
-                ...(state.view === v.k
+                ...(vm.currentView === v.k
                   ? { background: 'var(--bg-surface)', color: 'var(--text-primary)', boxShadow: '0 1px 2px rgba(0,0,0,.1)' }
                   : { color: 'var(--text-muted)' }),
               }}
@@ -127,7 +147,9 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
             </span>
           ))}
         </div>
+        )}
         <IconBtn title="Add task (⌘⇧N)" onClick={vm.openAddTask} style={{ fontSize: 15 }}>☑</IconBtn>
+        <IconBtn title="Open task tracker" onClick={openTracker} style={{ fontSize: 15 }}>⧉</IconBtn>
         <IconBtn title="Graph view (⌘G)" onClick={() => setState({ graphOpen: true })}>⬡</IconBtn>
         <IconBtn
           title="Toggle right sidebar (⌘⇧\)"

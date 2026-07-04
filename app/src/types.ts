@@ -1,4 +1,4 @@
-export type FileType = 'md' | 'html' | 'eml';
+export type FileType = 'md' | 'html' | 'eml' | 'pdf';
 
 export interface NoteFile {
   id: string;
@@ -55,7 +55,6 @@ export interface AppState {
   view: ViewMode;
   activeId: string | null;
   secondaryId: string | null;
-  secondaryView: ViewMode;
   openTabs: string[];
   filter: string;
   expandedDocs: Record<string, boolean>;
@@ -67,7 +66,7 @@ export interface AppState {
   wiki: boolean;
   autosave: boolean;
   htmlWidth: HtmlWidth;
-  design: 'default' | 'cowork' | 'cowork-plus';
+  design: 'default' | 'cowork' | 'cowork-plus' | 'midnight';
   folderOrder: string[];
   noteOrder: string[];
   fileMoves: Record<string, Partial<Pick<NoteFile, 'folder' | 'parent' | 'path' | 'title' | 'file' | 'pinned'>>>;

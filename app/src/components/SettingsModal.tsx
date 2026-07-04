@@ -25,6 +25,7 @@ const DESIGNS: { k: Design; label: string }[] = [
   { k: 'default', label: 'Default' },
   { k: 'cowork', label: 'Cowork' },
   { k: 'cowork-plus', label: 'Cowork+' },
+  { k: 'midnight', label: 'Midnight' },
 ];
 
 function toggle(on: boolean) {
@@ -49,7 +50,7 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid var(--border)', overflow: 'hidden', animation: 'pop .14s ease' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ font: '600 16px -apple-system,system-ui', color: 'var(--text-primary)' }}>Settings</div>
           <div
@@ -106,12 +107,12 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
               {VIEWS.map((v) => (
                 <span
                   key={v.k}
-                  onClick={() => setState({ view: v.k })}
+                  onClick={() => setState({ defaultView: v.k })}
                   style={{
                     padding: '5px 13px', borderRadius: 6, cursor: 'pointer',
-                    background: state.view === v.k ? 'var(--bg-surface)' : 'transparent',
-                    color: state.view === v.k ? 'var(--text-primary)' : 'var(--text-muted)',
-                    boxShadow: state.view === v.k ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
+                    background: state.defaultView === v.k ? 'var(--bg-surface)' : 'transparent',
+                    color: state.defaultView === v.k ? 'var(--text-primary)' : 'var(--text-muted)',
+                    boxShadow: state.defaultView === v.k ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
                   }}
                 >
                   {v.label}

@@ -20,7 +20,7 @@ import {
 } from '../lib/tasks';
 import type { CustomFilter, EmlData, FileType, FilterRule, HtmlWidth, NoteFile, TaskPriority, ViewMode } from '../types';
 
-interface Suggest { kind: 'wiki' | 'slash'; q: string; caret: number; }
+interface Suggest { kind: 'wiki' | 'slash'; q: string; caret: number; pane: 'primary' | 'secondary'; }
 
 export interface FolderNode {
   path: string;
@@ -40,6 +40,9 @@ interface EphemeralState {
   findRegex: boolean;
   historyOpen: boolean;
   historyPick: number;
+  // Which file the History modal is inspecting. null ⇒ the active (primary) file; the
+  // secondary breadcrumb sets this to the split pane's file so its History opens correctly.
+  historyTargetId: string | null;
   graphOpen: boolean;
   addTaskOpen: boolean;
   addTaskText: string;
@@ -48,10 +51,18 @@ interface EphemeralState {
   addTaskTargetId: string | null;
   shortcutsOpen: boolean;
   exportOpen: boolean;
+  // Separate flag for the split pane's breadcrumb export menu, so opening one column's
+  // Export menu doesn't also pop the other column's.
+  exportOpenSecondary: boolean;
   suggest: Suggest | null;
   smartFilterModalOpen: boolean;
   editingFilterId: string | null;
   lastSyncedAt: number | null;
+  // Which half of a split pair last had interaction focus — drives the tab bar's bold/current
+  // styling independent of activeId/secondaryId, which stay pinned to their left/right panes.
+  // false = primary (left) tab looks current; true = secondary (right) tab does. Only consulted
+  // while a pair actually exists (state.secondaryId is set) — otherwise ignored.
+  secondaryFocused: boolean;
 }
 
 function ephemeralDefaults(): EphemeralState {
@@ -59,15 +70,17 @@ function ephemeralDefaults(): EphemeralState {
     paletteOpen: false, paletteQuery: '', paletteIdx: 0,
     settingsOpen: false,
     findOpen: false, findQuery: '', replaceQuery: '', findRegex: false,
-    historyOpen: false, historyPick: 0,
+    historyOpen: false, historyPick: 0, historyTargetId: null,
     graphOpen: false,
     addTaskOpen: false, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
     shortcutsOpen: false,
     exportOpen: false,
+    exportOpenSecondary: false,
     suggest: null,
     smartFilterModalOpen: false,
     editingFilterId: null,
     lastSyncedAt: null,
+    secondaryFocused: false,
   };
 }
 
@@ -81,6 +94,14 @@ let mermaidInit = false;
 
 function withoutId(order: string[], id: string): string[] {
   return order.filter((x) => x !== id);
+}
+
+// Extension matching is case-insensitive (a vault can contain "Report.PDF" as easily as
+// "report.pdf") — used both for freshly-discovered files and to self-heal any file whose
+// stored type disagrees with what its actual filename says (see refreshVault).
+function typeFromFilename(name: string): FileType {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  return ext === 'html' ? 'html' : ext === 'eml' ? 'eml' : ext === 'pdf' ? 'pdf' : 'md';
 }
 
 // Used when reconciling two dynamicFiles entries that turned out to represent the same
@@ -100,6 +121,16 @@ function insertRelative(order: string[], id: string, targetId: string, position:
   if (idx === -1) return [...base, id];
   const at = position === 'before' ? idx : idx + 1;
   return [...base.slice(0, at), id, ...base.slice(at)];
+}
+
+// Like insertRelative, but moves a whole group of ids at once, preserving their relative
+// order — used by tab drag-reordering so a split pair always moves as one unit.
+function moveRelative(order: string[], ids: string[], targetId: string, position: 'before' | 'after'): string[] {
+  const idSet = new Set(ids);
+  const base = order.filter((x) => !idSet.has(x));
+  const idx = base.indexOf(targetId);
+  const at = idx === -1 ? base.length : (position === 'before' ? idx : idx + 1);
+  return [...base.slice(0, at), ...ids, ...base.slice(at)];
 }
 
 // Folders are identified by '/'-joined path strings ("Engineering", "Engineering/A1"),
@@ -124,6 +155,7 @@ interface DerivedDoc {
   isMd: boolean;
   isHtml: boolean;
   isEml: boolean;
+  isPdf: boolean;
   sourceValue: string;
   outline: ReturnType<typeof outlineMd>;
   words: number;
@@ -142,6 +174,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
   const isMd = file?.type === 'md';
   const isHtml = file?.type === 'html';
   const isEml = file?.type === 'eml';
+  const isPdf = file?.type === 'pdf';
   let sourceValue = '';
   let outline: ReturnType<typeof outlineMd> = [];
   let words = 0;
@@ -173,7 +206,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
     }
   }
 
-  return { isMd, isHtml, isEml, sourceValue, outline, words, activeTags, emlData, mdHtml, codeBlocks, mermaidBlocks };
+  return { isMd, isHtml, isEml, isPdf, sourceValue, outline, words, activeTags, emlData, mdHtml, codeBlocks, mermaidBlocks };
 }
 
 export function useNotesApp(showRightSidebar = true) {
@@ -185,14 +218,33 @@ export function useNotesApp(showRightSidebar = true) {
     setStateRaw((prev) => ({ ...prev, ...(typeof patch === 'function' ? patch(prev) : patch) }));
   }, []);
 
+  // The document actually being edited — the focused half of a split pair, or the sole open
+  // tab otherwise. Editing machinery (source input, suggestions, select-in-source, AI draft)
+  // targets this instead of activeId, so it follows focus instead of staying pinned to the
+  // left pane. activeId/secondaryId themselves stay fixed to their left/right panes.
+  const focusedNoteId = useCallback((): string | null => {
+    const s = stateRef.current;
+    return (s.secondaryFocused && s.secondaryId) ? s.secondaryId : s.activeId;
+  }, []);
+
+  // Sets the view mode (edit/split/preview) for whichever tab is focused *at call time* —
+  // resolved fresh inside the updater so a stale closure can never write to the wrong tab.
+  const setView = useCallback((mode: ViewMode) => {
+    setState((s) => {
+      const id = (s.secondaryFocused && s.secondaryId) ? s.secondaryId : s.activeId;
+      if (!id) return {};
+      return { viewByNote: { ...s.viewByNote, [id]: mode } };
+    });
+  }, [setState]);
+
   // ---- persistence (debounced) ----
   const saveTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       const p: PersistedState = {
-        collapsed: state.collapsed, railHidden: state.railHidden, view: state.view, activeId: state.activeId,
-        secondaryId: state.secondaryId, secondaryView: state.secondaryView,
+        collapsed: state.collapsed, railHidden: state.railHidden, defaultView: state.defaultView, viewByNote: state.viewByNote, activeId: state.activeId,
+        secondaryId: state.secondaryId,
         openTabs: state.openTabs, filter: state.filter, expandedDocs: state.expandedDocs, editedAt: state.editedAt,
         dynamicFiles: state.dynamicFiles, sources: state.sources, eml: state.eml, history: state.history,
         wiki: state.wiki, autosave: state.autosave, htmlWidth: state.htmlWidth,
@@ -238,9 +290,10 @@ export function useNotesApp(showRightSidebar = true) {
   const paletteInputRef = useRef<HTMLInputElement | null>(null);
   const addTaskInputRef = useRef<HTMLInputElement | null>(null);
   const mermaidBlocksRef = useRef<Record<string, string>>({});
-  // secondary (split) pane refs — mirror the primary pane's refs above
-  const sourceElRef2 = useRef<HTMLTextAreaElement | null>(null);
+  // secondary (split) pane refs — mirror the primary pane's refs above. Both panes can be
+  // independently editable, so the secondary gets its own source textarea ref too.
   const previewElRef2 = useRef<HTMLDivElement | null>(null);
+  const sourceElRef2 = useRef<HTMLTextAreaElement | null>(null);
   const mermaidBlocksRef2 = useRef<Record<string, string>>({});
 
   const touch = useCallback((id: string) => {
@@ -260,7 +313,20 @@ export function useNotesApp(showRightSidebar = true) {
   }, [setState, touch]);
 
   const open = useCallback((id: string) => {
-    setState((s) => ({ activeId: id, openTabs: s.openTabs.includes(id) ? s.openTabs : [...s.openTabs, id] }));
+    setState((s) => {
+      const openTabs = s.openTabs.includes(id) ? s.openTabs : [...s.openTabs, id];
+      if (id === s.activeId) return { openTabs, secondaryFocused: false };
+      // Clicking the split partner's tab (or its pane) is a no-op for pane assignment — the
+      // left pane stays pinned to activeId (editable) and the right pane stays pinned to
+      // secondaryId (read-only preview) for as long as the pair exists, regardless of which
+      // one was last clicked. It does move the tab bar's highlight there (secondaryFocused),
+      // so "current tab" tracks interaction even though the panes themselves don't move.
+      // Activating anything else dissolves any existing pairing — otherwise a stale
+      // secondaryId tags along onto an unrelated note (the "phantom split" bug, where opening
+      // a fresh note after closing everything still rendered two panes).
+      if (s.secondaryId && id === s.secondaryId) return { openTabs, secondaryFocused: true };
+      return { activeId: id, secondaryId: null, openTabs, secondaryFocused: false };
+    });
   }, [setState]);
 
   const closeTab = useCallback((id: string, e?: SyntheticEvent) => {
@@ -268,14 +334,19 @@ export function useNotesApp(showRightSidebar = true) {
     setState((s) => {
       const tabs = s.openTabs.filter((t) => t !== id);
       let act = s.activeId;
+      // Closing either half of a split pair permanently dissolves the link, rather than
+      // leaving a dangling secondaryId that resurfaces as a phantom split on the next open().
+      const dissolved = s.secondaryId && (id === s.secondaryId || id === s.activeId);
+      const sec = dissolved ? null : s.secondaryId;
       if (act === id) act = tabs[tabs.length - 1] || null;
-      return { openTabs: tabs, activeId: act };
+      return { openTabs: tabs, activeId: act, secondaryId: sec, secondaryFocused: dissolved ? false : s.secondaryFocused };
     });
   }, [setState]);
 
   const openSplit = useCallback((id: string) => {
     setState((s) => ({
       secondaryId: id,
+      secondaryFocused: false,
       // Land the split doc right next to the primary tab, so the pair shows up
       // adjacent in the tab bar instead of the secondary doc having no tab at all.
       openTabs: s.openTabs.includes(id)
@@ -285,7 +356,48 @@ export function useNotesApp(showRightSidebar = true) {
   }, [setState]);
 
   const closeSplitPane = useCallback(() => {
-    setState({ secondaryId: null });
+    // Whichever pane had focus becomes the sole remaining document — unlinking shouldn't
+    // silently snap back to the primary tab if you'd been looking at the secondary one.
+    setState((s) => ({
+      activeId: (s.secondaryFocused && s.secondaryId) ? s.secondaryId : s.activeId,
+      secondaryId: null,
+      secondaryFocused: false,
+    }));
+  }, [setState]);
+
+  // Pairs two already-open tabs into split view from the tab bar's own "Split with…" picker
+  // (as opposed to openSplit, which always pairs a note with whatever is currently active).
+  // Reuses insertRelative the same way openSplit does, so the pair always lands adjacent.
+  const pairTabs = useCallback((primaryId: string, otherId: string) => {
+    if (primaryId === otherId) return;
+    setState((s) => ({
+      activeId: primaryId,
+      secondaryId: otherId,
+      secondaryFocused: false,
+      openTabs: insertRelative(s.openTabs, otherId, primaryId, 'after'),
+    }));
+  }, [setState]);
+
+  // Drag-to-reorder in the tab bar. Dragging either half of the active split pair moves both
+  // tabs together (they must stay adjacent — that's how the pane pairing is tracked), and
+  // dropping a plain tab onto the *inside* boundary of someone else's pair snaps it just
+  // outside instead, so a pair never gets split apart by an unrelated tab landing between them.
+  const reorderTab = useCallback((draggedId: string, targetId: string, position: 'before' | 'after') => {
+    if (draggedId === targetId) return;
+    setState((s) => {
+      const pairIds = (s.secondaryId && s.activeId) ? [s.activeId, s.secondaryId] : [];
+      const isDraggedPaired = pairIds.includes(draggedId);
+      const unit = isDraggedPaired ? pairIds : [draggedId];
+      if (unit.includes(targetId)) return {};
+      let effTarget = targetId;
+      let effPosition = position;
+      if (!isDraggedPaired && pairIds.length === 2 && pairIds.includes(targetId)) {
+        const [primary, secondary] = pairIds;
+        if (targetId === primary && position === 'after') { effTarget = secondary; effPosition = 'after'; }
+        else if (targetId === secondary && position === 'before') { effTarget = primary; effPosition = 'before'; }
+      }
+      return { openTabs: moveRelative(s.openTabs, unit, effTarget, effPosition) };
+    });
   }, [setState]);
 
   const vaultPath = useCallback((folder: string, file: string) => {
@@ -344,7 +456,7 @@ export function useNotesApp(showRightSidebar = true) {
     if (!src) return;
     const title = src.title + ' copy';
     const id = 'note-' + slug(title) + '-' + Date.now();
-    const file = slug(title) + (src.type === 'md' ? '.md' : src.type === 'html' ? '.html' : '.eml');
+    const file = slug(title) + (src.type === 'md' ? '.md' : src.type === 'html' ? '.html' : src.type === 'pdf' ? '.pdf' : '.eml');
     const body = stateRef.current.sources[srcId] || '';
     const nf: NoteFile = { id, title, file, type: src.type, folder: src.folder, parent: src.parent, pinned: false };
     if (isTauri() && stateRef.current.vaultRoot && src.path) {
@@ -426,6 +538,16 @@ export function useNotesApp(showRightSidebar = true) {
     const pathless = new Map<string, NoteFile>();
     current.forEach((f) => { if (!dropIds.has(f.id) && !f.path) pathless.set(f.folder + '/' + f.file, f); });
 
+    // Self-heals any already-known file whose stored type disagrees with its actual filename —
+    // e.g. a .pdf that was scanned before pdf support existed and is stuck typed as 'md'
+    // forever otherwise, since the `known` check below skips re-deriving type for it.
+    const typeFixes = new Map<string, FileType>();
+    current.forEach((f) => {
+      if (!f.path || dropIds.has(f.id)) return;
+      const correct = typeFromFilename(f.file);
+      if (correct !== f.type) typeFixes.set(f.id, correct);
+    });
+
     const added: NoteFile[] = [];
     const backfills: { id: string; path: string }[] = [];
     const discoveredFolders = new Set<string>();
@@ -441,8 +563,7 @@ export function useNotesApp(showRightSidebar = true) {
       if (known.has(e.path)) return;
       const lastSlash = rel.lastIndexOf('/');
       const folder = lastSlash === -1 ? 'Notes' : rel.slice(0, lastSlash);
-      const ext = e.name.split('.').pop() || 'md';
-      const type: FileType = ext === 'html' ? 'html' : ext === 'eml' ? 'eml' : 'md';
+      const type = typeFromFilename(e.name);
       // A path-less entry with this exact folder+file already represents this file
       // (e.g. a daily note created before it was ever synced to disk) — adopt it
       // instead of minting a second entry for the same underlying file.
@@ -459,7 +580,7 @@ export function useNotesApp(showRightSidebar = true) {
     // self-heals on next refresh.
     const backfillFiles = backfills.map((b) => ({ ...current.find((f) => f.id === b.id)!, path: b.path }));
     const stale = current.filter((f) => (
-      f.path && !dropIds.has(f.id) && !backfills.some((b) => b.id === f.id)
+      f.path && !dropIds.has(f.id) && !backfills.some((b) => b.id === f.id) && f.type !== 'pdf'
       && (f.type === 'eml' ? !(f.id in stateRef.current.eml) : !(f.id in stateRef.current.sources))
     ));
     const toRead = [...added, ...stale, ...backfillFiles];
@@ -467,7 +588,9 @@ export function useNotesApp(showRightSidebar = true) {
     const newEml: Record<string, EmlData> = {};
     if (toRead.length) {
       await Promise.all(toRead.map(async (f) => {
-        if (!f.path) return;
+        // PDFs are binary — never read as UTF-8 text; PreviewPane points an iframe straight
+        // at the file on disk via the asset protocol instead.
+        if (!f.path || f.type === 'pdf') return;
         const raw = await readFile(f.path).catch(() => null);
         if (raw === null) return;
         if (f.type === 'eml') newEml[f.id] = parseEml(raw);
@@ -497,7 +620,7 @@ export function useNotesApp(showRightSidebar = true) {
     }
 
     const hasChanges = added.length || discoveredFolders.size || Object.keys(newSources).length
-      || Object.keys(newEml).length || backfills.length || dropIds.size;
+      || Object.keys(newEml).length || backfills.length || dropIds.size || typeFixes.size;
     if (hasChanges) {
       const now = Date.now();
       setState((s) => {
@@ -510,8 +633,13 @@ export function useNotesApp(showRightSidebar = true) {
         dropIds.forEach((id) => { delete fileMoves[id]; });
         const remapId = (id: string) => remap.get(id) ?? id;
         return {
-          dynamicFiles: (added.length || dropIds.size)
-            ? [...s.dynamicFiles.filter((f) => !dropIds.has(f.id)), ...added]
+          dynamicFiles: (added.length || dropIds.size || typeFixes.size)
+            ? [
+                ...s.dynamicFiles
+                  .filter((f) => !dropIds.has(f.id))
+                  .map((f) => (typeFixes.has(f.id) ? { ...f, type: typeFixes.get(f.id)! } : f)),
+                ...added,
+              ]
             : s.dynamicFiles,
           noteOrder: (added.length || dropIds.size)
             ? [...s.noteOrder.filter((id) => !dropIds.has(id)), ...added.map((f) => f.id)]
@@ -616,7 +744,10 @@ export function useNotesApp(showRightSidebar = true) {
     setTimeout(() => open(id), 0);
   }, [ensureDaily, open]);
 
-  const openTaskManager = useCallback(() => setState({ activeId: TASK_MANAGER_ID }), [setState]);
+  // Dissolves any active split — the Task Manager is a full-page view, not a split partner,
+  // and leaving a stale secondaryId behind would make its old tab a dead click (it'd hit the
+  // no-op branch in open() instead of switching away from the Task Manager).
+  const openTaskManager = useCallback(() => setState({ activeId: TASK_MANAGER_ID, secondaryId: null }), [setState]);
 
   const openAddTask = useCallback(() => setState({
     addTaskOpen: true, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
@@ -646,11 +777,11 @@ export function useNotesApp(showRightSidebar = true) {
         return {
           sources: { ...s2.sources, [id]: next },
           editedAt: { ...s2.editedAt, [id]: Date.now() },
-          ...(navigate ? { activeId: id, openTabs: s2.openTabs.includes(id) ? s2.openTabs : [...s2.openTabs, id] } : {}),
         };
       });
+      if (navigate) open(id);
     }, 0);
-  }, [ensureDaily, fileOf, setState, vaultPath]);
+  }, [ensureDaily, fileOf, open, setState, vaultPath]);
 
   const saveAddTask = useCallback(() => {
     const s = stateRef.current;
@@ -663,9 +794,7 @@ export function useNotesApp(showRightSidebar = true) {
     });
   }, [addTaskLine, setState]);
 
-  const aiGenerate = useCallback(() => {
-    const id = stateRef.current.activeId;
-    if (!id) return;
+  const aiGenerate = useCallback((id: string) => {
     setState((s) => ({
       eml: {
         ...s.eml,
@@ -677,8 +806,10 @@ export function useNotesApp(showRightSidebar = true) {
   // ---- bodyOf / export ----
   const bodyOf = useCallback((f: NoteFile): string => (f.type === 'eml' ? (stateRef.current.eml[f.id] || {} as EmlData).body || '' : stateRef.current.sources[f.id] || ''), []);
 
-  const currentExportHtml = useCallback((): string => {
-    const a = fileOf(stateRef.current.activeId);
+  // All export helpers accept an optional target id (defaulting to the active/primary file),
+  // so the split pane's breadcrumb can export the secondary file without changing existing callers.
+  const currentExportHtml = useCallback((targetId?: string | null): string => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     if (!a) return '';
     if (a.type === 'md') {
       const fr = parseFront(stateRef.current.sources[a.id] || '');
@@ -689,17 +820,17 @@ export function useNotesApp(showRightSidebar = true) {
     return d.body || '';
   }, [fileOf]);
 
-  const exportPrint = useCallback(() => {
-    const a = fileOf(stateRef.current.activeId);
+  const exportPrint = useCallback((targetId?: string | null) => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write('<!doctype html><meta charset="utf-8"><title>' + (a ? a.title : '') + '</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:var(--text-primary)">' + currentExportHtml() + '</body>');
+    w.document.write('<!doctype html><meta charset="utf-8"><title>' + (a ? a.title : '') + '</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:var(--text-primary)">' + currentExportHtml(a?.id) + '</body>');
     w.document.close();
     setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 350);
   }, [currentExportHtml, fileOf]);
 
-  const exportDownload = useCallback(() => {
-    const a = fileOf(stateRef.current.activeId);
+  const exportDownload = useCallback((targetId?: string | null) => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     if (!a) return;
     if (a.type === 'eml') {
       const d = stateRef.current.eml[a.id] || ({} as EmlData);
@@ -710,15 +841,15 @@ export function useNotesApp(showRightSidebar = true) {
     }
   }, [fileOf]);
 
-  const exportDoc = useCallback(() => {
-    const a = fileOf(stateRef.current.activeId);
+  const exportDoc = useCallback((targetId?: string | null) => {
+    const a = fileOf(targetId ?? stateRef.current.activeId);
     if (!a) return;
-    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>' + currentExportHtml() + '</body></html>';
+    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>' + currentExportHtml(a.id) + '</body></html>';
     download((a.title || 'document') + '.doc', html, 'application/msword');
   }, [currentExportHtml, fileOf]);
 
-  const exportCopyHtml = useCallback(() => {
-    if (navigator.clipboard) navigator.clipboard.writeText(currentExportHtml());
+  const exportCopyHtml = useCallback((targetId?: string | null) => {
+    if (navigator.clipboard) navigator.clipboard.writeText(currentExportHtml(targetId));
   }, [currentExportHtml]);
 
   // ---- preview click delegation (copy / task / wiki) ----
@@ -757,6 +888,8 @@ export function useNotesApp(showRightSidebar = true) {
   }, [openOrCreate, toggleTask]);
 
   // ---- source input + suggestions ----
+  // Each pane resolves its own note directly (activeId/secondaryId) instead of "whichever is
+  // focused" — both panes can be independently editable, so this is no longer focus-dependent.
   const onSourceInput = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
     const id = stateRef.current.activeId;
     if (!id) return;
@@ -766,16 +899,35 @@ export function useNotesApp(showRightSidebar = true) {
     let sug: Suggest | null = null;
     const mw = /\[\[([^\]\n]*)$/.exec(before);
     const ms = /(?:^|\n)\/(\w*)$/.exec(before);
-    if (mw) sug = { kind: 'wiki', q: mw[1], caret };
-    else if (ms) sug = { kind: 'slash', q: ms[1], caret };
+    if (mw) sug = { kind: 'wiki', q: mw[1], caret, pane: 'primary' };
+    else if (ms) sug = { kind: 'slash', q: ms[1], caret, pane: 'primary' };
+    setState((s) => ({ sources: { ...s.sources, [id]: v }, suggest: sug }));
+    touch(id);
+  }, [setState, touch]);
+
+  // secondary (split) pane mirror of onSourceInput above — same duplication convention as
+  // onPreviewClick/onPreviewClickSecondary.
+  const onSourceInputSecondary = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
+    const id = stateRef.current.secondaryId;
+    if (!id) return;
+    const v = e.target.value;
+    const caret = e.target.selectionStart;
+    const before = v.slice(0, caret);
+    let sug: Suggest | null = null;
+    const mw = /\[\[([^\]\n]*)$/.exec(before);
+    const ms = /(?:^|\n)\/(\w*)$/.exec(before);
+    if (mw) sug = { kind: 'wiki', q: mw[1], caret, pane: 'secondary' };
+    else if (ms) sug = { kind: 'slash', q: ms[1], caret, pane: 'secondary' };
     setState((s) => ({ sources: { ...s.sources, [id]: v }, suggest: sug }));
     touch(id);
   }, [setState, touch]);
 
   const pickSuggest = useCallback((item: string) => {
-    const id = stateRef.current.activeId;
     const sg = stateRef.current.suggest;
-    if (!id || !sg) return;
+    if (!sg) return;
+    const isSecondary = sg.pane === 'secondary';
+    const id = isSecondary ? stateRef.current.secondaryId : stateRef.current.activeId;
+    if (!id) return;
     const v = stateRef.current.sources[id] || '';
     const caret = sg.caret;
     const removeLen = (sg.kind === 'wiki' ? 2 : 1) + sg.q.length;
@@ -783,30 +935,28 @@ export function useNotesApp(showRightSidebar = true) {
     const insert = sg.kind === 'wiki' ? '[[' + item + ']]' : item;
     const nv = v.slice(0, start) + insert + v.slice(caret);
     setState({ sources: { ...stateRef.current.sources, [id]: nv }, suggest: null });
-    const el = sourceElRef.current;
+    const el = isSecondary ? sourceElRef2.current : sourceElRef.current;
     if (el) {
       const pos = start + insert.length;
       setTimeout(() => { try { el.focus(); el.setSelectionRange(pos, pos); } catch { /* ignore */ } }, 10);
     }
   }, [setState]);
 
-  const selectInSource = useCallback((start: number, end: number) => {
-    const el = sourceElRef.current;
-    if (!el || start < 0) return;
-    el.setSelectionRange(start, end);
-    const lineHeight = 25;
-    const line = el.value.slice(0, start).split('\n').length - 1;
-    el.scrollTop = Math.max(0, line * lineHeight - el.clientHeight / 2);
-  }, []);
-
-  const selectPreviewTextInSource = useCallback((text: string) => {
+  const selectPreviewTextInSource = useCallback((text: string, pane: 'primary' | 'secondary' = 'primary') => {
     const t = text.trim();
     if (!t) return;
-    const src = stateRef.current.sources[stateRef.current.activeId || ''] || '';
+    const isSecondary = pane === 'secondary';
+    const id = isSecondary ? stateRef.current.secondaryId : stateRef.current.activeId;
+    const src = stateRef.current.sources[id || ''] || '';
     const idx = src.indexOf(t);
     if (idx === -1) return;
-    selectInSource(idx, idx + t.length);
-  }, [selectInSource]);
+    const el = isSecondary ? sourceElRef2.current : sourceElRef.current;
+    if (!el) return;
+    el.setSelectionRange(idx, idx + t.length);
+    const lineHeight = 25;
+    const line = el.value.slice(0, idx).split('\n').length - 1;
+    el.scrollTop = Math.max(0, line * lineHeight - el.clientHeight / 2);
+  }, []);
 
   const scrollTo = useCallback((id: string) => {
     const c = previewElRef.current;
@@ -827,17 +977,22 @@ export function useNotesApp(showRightSidebar = true) {
       else if (meta && k === 'g') { e.preventDefault(); setState((s2) => ({ graphOpen: !s2.graphOpen })); }
       else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); openAddTask(); }
       else if (meta && e.shiftKey && k === 't') { e.preventDefault(); openTaskManager(); }
-      else if (meta && k === 'e' && s.activeId) { e.preventDefault(); setState((s2) => ({ view: s2.view === 'preview' ? 'edit' : 'preview' })); }
+      else if (meta && k === 'e' && s.activeId) {
+        e.preventDefault();
+        const id = (s.secondaryFocused && s.secondaryId) ? s.secondaryId : s.activeId;
+        const cur = (id && s.viewByNote[id]) || s.defaultView;
+        setView(cur === 'preview' ? 'edit' : 'preview');
+      }
       else if (meta && e.key === '/') { e.preventDefault(); setState((s2) => ({ shortcutsOpen: !s2.shortcutsOpen })); }
       else if (meta && k === 'w' && s.activeId) { e.preventDefault(); closeTab(s.activeId); }
-      else if (meta && /^[1-9]$/.test(e.key)) { const i = +e.key - 1; if (s.openTabs[i]) { e.preventDefault(); setState({ activeId: s.openTabs[i] }); } }
+      else if (meta && /^[1-9]$/.test(e.key)) { const i = +e.key - 1; if (s.openTabs[i]) { e.preventDefault(); open(s.openTabs[i]); } }
       else if (meta && e.shiftKey && e.key === '|') { e.preventDefault(); setState((s2) => ({ railHidden: !s2.railHidden })); }
       else if (meta && e.key === '\\') { e.preventDefault(); setState((s2) => ({ collapsed: !s2.collapsed })); }
-      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, graphOpen: false, addTaskOpen: false, shortcutsOpen: false, exportOpen: false, suggest: null, smartFilterModalOpen: false }); }
+      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, historyTargetId: null, graphOpen: false, addTaskOpen: false, shortcutsOpen: false, exportOpen: false, exportOpenSecondary: false, suggest: null, smartFilterModalOpen: false }); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTab, openAddTask, openTaskManager, setState]);
+  }, [closeTab, open, openAddTask, openTaskManager, setState, setView]);
 
   // focus management
   useEffect(() => {
@@ -848,12 +1003,20 @@ export function useNotesApp(showRightSidebar = true) {
   }, [state.addTaskOpen]);
 
   // =================== derived view model ===================
+  // View mode is per-tab (viewByNote), not global — falls back to defaultView (Settings'
+  // "Default view") for any tab that hasn't been individually switched. Each pane looks up its
+  // own note's mode, so switching focus never carries one tab's mode onto the other.
+  const viewOf = (id: string | null): ViewMode => (id && state.viewByNote[id]) || state.defaultView;
+
   const active = fileOf(state.activeId);
   const isMd = active?.type === 'md';
   const isHtml = active?.type === 'html';
   const isEml = active?.type === 'eml';
-  const showSource = !!active && (state.view === 'edit' || state.view === 'split');
-  const showPreview = !!active && (state.view === 'preview' || state.view === 'split');
+  const isPdf = active?.type === 'pdf';
+  const activeView = viewOf(state.activeId);
+  // PDFs are preview-only, always — the stored per-tab view mode never applies to them.
+  const showSource = !!active && !isPdf && (activeView === 'edit' || activeView === 'split');
+  const showPreview = !!active && (isPdf || activeView === 'preview' || activeView === 'split');
 
   const primaryDoc = deriveDoc(active, state.sources, state.eml, state.wiki, '');
   const {
@@ -866,6 +1029,19 @@ export function useNotesApp(showRightSidebar = true) {
   const secondaryDoc = deriveDoc(secondaryFile, state.sources, state.eml, state.wiki, 'sec-');
   codeBlocksRef2.current = secondaryDoc.codeBlocks;
   mermaidBlocksRef2.current = secondaryDoc.mermaidBlocks;
+  // The edit/split/preview toggle follows whichever pane currently has focus — the unfocused
+  // pane always falls back to plain read-only preview regardless of view mode (App.tsx picks
+  // between these and the primary showSource/showPreview above based on state.secondaryFocused).
+  const secondaryView = viewOf(state.secondaryId);
+  const secondaryIsPdf = secondaryFile?.type === 'pdf';
+  const secondaryShowSource = !!secondaryFile && !secondaryIsPdf && (secondaryView === 'edit' || secondaryView === 'split');
+  const secondaryShowPreview = !!secondaryFile && (secondaryIsPdf || secondaryView === 'preview' || secondaryView === 'split');
+
+  // The document actually in focus (the secondary pane when it's the one last interacted with,
+  // otherwise the primary) — same resolution used by focusedNoteId() for editing, and by
+  // currentView below so the Toolbar's edit/split/preview buttons act on the right tab.
+  const focusedId = (state.secondaryFocused && state.secondaryId) ? state.secondaryId : state.activeId;
+  const currentView = viewOf(focusedId);
 
   // katex/mermaid hydration after markdown preview paints
   useEffect(() => {
@@ -1023,23 +1199,25 @@ export function useNotesApp(showRightSidebar = true) {
     }
   }, [open, openAddTask, openDaily, openOrCreate, openTaskManager, setState]);
 
-  // find & replace
+  // find & replace — targets whichever pane is focused (same as onSourceInput), not always
+  // the primary file, since findNextFn below already implicitly follows focus via sourceElRef.
+  const editingFile = fileOf(focusedId);
   let findCount = '';
-  if (state.findQuery && active && (isMd || isHtml)) {
+  if (state.findQuery && editingFile && (editingFile.type === 'md' || editingFile.type === 'html')) {
     try {
       const re = state.findRegex ? new RegExp(state.findQuery, 'g') : new RegExp(escapeRegExp(state.findQuery), 'g');
-      const m = (state.sources[active.id] || '').match(re);
+      const m = (state.sources[editingFile.id] || '').match(re);
       findCount = (m ? m.length : 0) + ' found';
     } catch { findCount = 'bad regex'; }
   }
   const replaceAllFn = useCallback(() => {
-    const a = fileOf(stateRef.current.activeId);
+    const a = fileOf(focusedNoteId());
     if (!a || !stateRef.current.findQuery) return;
     try {
       const re = stateRef.current.findRegex ? new RegExp(stateRef.current.findQuery, 'g') : new RegExp(escapeRegExp(stateRef.current.findQuery), 'g');
       setSource(a.id, (stateRef.current.sources[a.id] || '').replace(re, stateRef.current.replaceQuery));
     } catch { /* ignore */ }
-  }, [fileOf, setSource]);
+  }, [fileOf, focusedNoteId, setSource]);
   const findNextFn = useCallback(() => {
     const el = sourceElRef.current;
     if (!el || !stateRef.current.findQuery) return;
@@ -1066,10 +1244,16 @@ export function useNotesApp(showRightSidebar = true) {
   }
 
   // history
+  // canHistory drives the primary breadcrumb's History button; the modal itself keys off
+  // historyTargetId (falling back to the active file) so the split pane's breadcrumb can
+  // open history for the secondary file.
   const canHistory = !!active && (isMd || isHtml);
-  const hid = active ? active.id : null;
+  const secondaryCanHistory = !!secondaryFile && (secondaryDoc.isMd || secondaryDoc.isHtml);
+  const historyFile = fileOf(state.historyTargetId ?? state.activeId);
+  const hid = historyFile ? historyFile.id : null;
+  const canShowHistory = !!historyFile && (historyFile.type === 'md' || historyFile.type === 'html');
   const hist = (hid && state.history[hid]) || [];
-  const curText = canHistory && hid ? (state.sources[hid] || '') : '';
+  const curText = canShowHistory && hid ? (state.sources[hid] || '') : '';
   const snap = state.historyPick >= 0 ? hist[state.historyPick] : null;
   const diffRows = snap ? diffLines(snap.text.split('\n'), curText.split('\n')) : [];
   const saveSnapshot = useCallback(() => {
@@ -1265,7 +1449,7 @@ export function useNotesApp(showRightSidebar = true) {
     const f = fileOf(id);
     const title = newTitle.trim();
     if (!f || !title || title === f.title) return;
-    const ext = f.type === 'md' ? '.md' : f.type === 'html' ? '.html' : '.eml';
+    const ext = f.type === 'md' ? '.md' : f.type === 'html' ? '.html' : f.type === 'pdf' ? '.pdf' : '.eml';
     const file = slug(title) + ext;
     let newPath: string | undefined;
     if (isTauri() && stateRef.current.vaultRoot && f.path) {
@@ -1428,51 +1612,74 @@ export function useNotesApp(showRightSidebar = true) {
     return segs;
   }, [active, all, fileOf]);
 
-  // secondary (split) pane — mirrors the primary doc's shape for EditorPane/PreviewPane
+  // breadcrumb for the split (secondary) pane — mirrors pathSegments but for secondaryFile,
+  // so the preview column can render its own breadcrumb row (matching the design handoff).
+  const secondaryPathSegments = useMemo(() => {
+    if (!secondaryFile) return [];
+    const ancestors: NoteFile[] = [];
+    let p = secondaryFile.parent;
+    while (p) { const pf = fileOf(p); if (!pf) break; ancestors.unshift(pf); p = pf.parent; }
+    const segs: { label: string; title: string; id?: string; current: boolean }[] = [];
+    const folderParts = secondaryFile.folder.split('/');
+    folderParts.forEach((part, i) => {
+      const prefixPath = folderParts.slice(0, i + 1).join('/');
+      const firstInFolder = all.find((f) => f.folder === prefixPath && !f.parent);
+      segs.push({ label: part, title: 'Folder · ' + prefixPath, id: firstInFolder?.id, current: false });
+    });
+    ancestors.forEach((a) => segs.push({ label: a.title, title: a.file, id: a.id, current: false }));
+    segs.push({ label: secondaryFile.file, title: secondaryFile.file, current: true });
+    return segs;
+  }, [secondaryFile, all, fileOf]);
+
+  const secondaryActiveTags = secondaryDoc.activeTags;
+
+  // secondary (split) pane — the linked partner is always shown read-only (preview), so this
+  // only carries what PreviewPane/PathBar/StatusBar need, not an editable source.
   const secondary = {
     id: state.secondaryId,
     file: secondaryFile,
     isMd: secondaryDoc.isMd,
     isHtml: secondaryDoc.isHtml,
     isEml: secondaryDoc.isEml,
+    isPdf: secondaryDoc.isPdf,
     sourceValue: secondaryDoc.sourceValue,
     mdHtml: secondaryDoc.mdHtml,
     emlData: secondaryDoc.emlData,
-    view: state.secondaryView,
-    sourceElRef: sourceElRef2,
+    words: secondaryDoc.words,
+    backlinks: (secondaryFile && backlinkMap[secondaryFile.id]) || [],
     previewElRef: previewElRef2,
-    onSourceInput: (e: ChangeEvent<HTMLTextAreaElement>) => {
-      const id = stateRef.current.secondaryId;
-      if (!id) return;
-      setSource(id, e.target.value);
-    },
     onPreviewClick: onPreviewClickSecondary,
+    sourceElRef: sourceElRef2,
+    onSourceInput: onSourceInputSecondary,
+    showSource: secondaryShowSource,
+    showPreview: secondaryShowPreview,
   };
 
   return {
     state, setState, stateRef,
     all, fileOf, fileTags, allFiles: all,
     badgeColors, typeLabels,
-    active, isMd, isHtml, isEml, showSource, showPreview,
+    active, isMd, isHtml, isEml, isPdf, showSource, showPreview, currentView, setView,
     sourceValue, mdHtml, outline, words, activeTags, emlData,
     backlinks, backlinkCount: backlinks.length, unlinked, graph, paletteResults, runPaletteResult,
     findCount, replaceAllFn, findNextFn,
     suggestItems, suggestTitle, pickSuggest,
-    canHistory, historyList: hist, snap, diffRows, saveSnapshot, restore,
+    canHistory, historyFile, historyList: hist, snap, diffRows, saveSnapshot, restore,
     recentDocs, recentlyCreated, tagCount, folderTree, pathSegments,
+    secondaryPathSegments, secondaryActiveTags, secondaryCanHistory,
     pinnedFiles, pinnedFolderPaths,
     accent: ACCENT, accentSoft: ACCENT_SOFT,
     showRightSidebar,
     // refs
     sourceElRef, previewElRef, paletteInputRef, addTaskInputRef,
     // split pane
-    secondary, openSplit, closeSplitPane,
+    secondary, openSplit, closeSplitPane, pairTabs, reorderTab,
     // actions
     open, closeTab, touch, setSource, setEml, aiGenerate, toggleTask, openOrCreate,
     tasks, taskCounts,
     openAddTask, closeAddTask, saveAddTask, addTaskLine, openTaskManager, ensureDaily, openDaily,
     currentExportHtml, exportPrint, exportDownload, exportDoc, exportCopyHtml,
-    onPreviewClick, onSourceInput, scrollTo, selectInSource, selectPreviewTextInSource,
+    onPreviewClick, onSourceInput, scrollTo, selectPreviewTextInSource,
     openInBrowser,
     agoLabel,
     childrenOf, newFile, duplicateFile, moveFileTo, deleteFile, toggleExpand, pickVaultRoot, refreshVault,

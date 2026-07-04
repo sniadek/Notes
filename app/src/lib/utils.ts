@@ -1,3 +1,9 @@
+import type { DocFontSize } from '../types';
+
+export const FONT_SCALES: Record<DocFontSize, number> = {
+  small: 0.9, medium: 1, large: 1.15, xlarge: 1.3,
+};
+
 export function agoLabel(ts: number | undefined): string {
   if (!ts) return '';
   const d = Date.now() - ts;

@@ -5,15 +5,18 @@ import type { CustomFilter, DocFontSize, DocWidth, EmlData, HistorySnapshot, Not
 
 const STORAGE_KEY = 'notes-app:v1';
 
-export type Design = 'default' | 'cowork' | 'cowork-plus';
+export type Design = 'default' | 'cowork' | 'cowork-plus' | 'midnight';
 
 export interface PersistedState {
   collapsed: boolean;
   railHidden: boolean;
-  view: ViewMode;
+  // App-wide fallback for tabs that haven't been individually switched (Settings > Default
+  // view). Per-tab overrides live in viewByNote, keyed by note id — view mode must be per-tab,
+  // not global, so switching focus between two panes doesn't carry one's mode onto the other.
+  defaultView: ViewMode;
+  viewByNote: Record<string, ViewMode>;
   activeId: string | null;
   secondaryId: string | null;
-  secondaryView: ViewMode;
   openTabs: string[];
   filter: string;
   expandedDocs: Record<string, boolean>;
@@ -41,10 +44,10 @@ export function defaultPersistedState(): PersistedState {
   return {
     collapsed: false,
     railHidden: false,
-    view: 'split',
+    defaultView: 'split',
+    viewByNote: {},
     activeId: 'api',
     secondaryId: null,
-    secondaryView: 'preview',
     openTabs: ['api', 'landing', 'q2'],
     filter: 'all',
     expandedDocs: { api: true, roadmap: true },
@@ -56,7 +59,7 @@ export function defaultPersistedState(): PersistedState {
     wiki: true,
     autosave: true,
     htmlWidth: 'desktop',
-    docWidth: 'comfortable',
+    docWidth: 'full',
     docFontSize: 'medium',
     vaultRoot: null,
     design: 'default',

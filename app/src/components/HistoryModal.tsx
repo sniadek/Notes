@@ -2,13 +2,13 @@ import { useState } from 'react';
 import type { NotesAppVM } from '../hooks/useNotesApp';
 
 export default function HistoryModal({ vm }: { vm: NotesAppVM }) {
-  const { state, setState, active, historyList, snap, diffRows, saveSnapshot, restore, accentSoft } = vm;
+  const { state, setState, historyFile, historyList, snap, diffRows, saveSnapshot, restore, accentSoft } = vm;
   const [saveHover, setSaveHover] = useState(false);
   const [closeHover, setCloseHover] = useState(false);
 
   if (!state.historyOpen) return null;
 
-  const close = () => setState({ historyOpen: false });
+  const close = () => setState({ historyOpen: false, historyTargetId: null });
 
   const entries = [{ label: 'Current version', ts: 'now', idx: -1 }, ...historyList.map((h, i) => ({
     label: 'Version ' + (historyList.length - i), ts: h.ts, idx: i,
@@ -16,15 +16,15 @@ export default function HistoryModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 760, maxWidth: '94vw', height: 560, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease', display: 'flex', flexDirection: 'column' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 760, maxWidth: '94vw', height: 560, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid var(--border)', overflow: 'hidden', animation: 'pop .14s ease', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ font: '600 15px -apple-system,system-ui', color: 'var(--text-primary)' }}>Version history · {active ? active.file : ''}</div>
+          <div style={{ font: '600 15px -apple-system,system-ui', color: 'var(--text-primary)' }}>Version history · {historyFile ? historyFile.file : ''}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span
               onClick={saveSnapshot}
               onMouseEnter={() => setSaveHover(true)}
               onMouseLeave={() => setSaveHover(false)}
-              style={{ font: '500 12px -apple-system,system-ui', color: 'var(--text-muted)', padding: '6px 11px', borderRadius: 8, border: '1px solid rgba(0,0,0,.12)', cursor: 'pointer', background: saveHover ? 'var(--bg-subtle)' : 'transparent' }}
+              style={{ font: '500 12px -apple-system,system-ui', color: 'var(--text-muted)', padding: '6px 11px', borderRadius: 8, border: '1px solid var(--border)', cursor: 'pointer', background: saveHover ? 'var(--bg-subtle)' : 'transparent' }}
             >
               Save snapshot
             </span>
@@ -52,7 +52,7 @@ export default function HistoryModal({ vm }: { vm: NotesAppVM }) {
             ))}
           </div>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-            <div className="sc" style={{ flex: 1, overflow: 'auto', padding: '14px 16px', font: '12.5px/1.65 ui-monospace,Menlo,monospace', background: '#fdfcf9' }}>
+            <div className="sc" style={{ flex: 1, overflow: 'auto', padding: '14px 16px', font: '12.5px/1.65 ui-monospace,Menlo,monospace', background: 'var(--bg-subtle)' }}>
               {snap
                 ? diffRows.map((d, i) => (
                   <div

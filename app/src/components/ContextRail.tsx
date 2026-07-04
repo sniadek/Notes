@@ -6,7 +6,7 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
   const { outline, backlinks, unlinked, active, childrenOf } = vm;
   const subPages = active ? childrenOf(active.id) : [];
   return (
-    <div className="sc" style={{ width: 250, background: '#faf9f6', borderLeft: '1px solid rgba(0,0,0,.06)', overflow: 'auto', flex: 'none', padding: '22px 18px' }}>
+    <div className="sc" style={{ width: 250, background: 'var(--bg-bar)', borderLeft: '1px solid var(--border)', overflow: 'auto', flex: 'none', padding: '22px 18px' }}>
       {subPages.length > 0 && (
         <>
           <div style={sectionLabel}>SUB-PAGES · {subPages.length}</div>
@@ -15,9 +15,9 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
               <div
                 key={c.id}
                 onClick={() => vm.open(c.id)}
-                style={{ padding: '10px 12px', background: '#fff', border: '1px solid rgba(0,0,0,.06)', borderRadius: 9, cursor: 'pointer' }}
+                style={{ padding: '10px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer' }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'oklch(0.8 0.08 var(--accent-hue))'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(0,0,0,.06)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
               >
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{c.title}</div>
               </div>
@@ -55,9 +55,9 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
               <div
                 key={b.id}
                 onClick={() => vm.open(b.id)}
-                style={{ padding: '10px 12px', background: '#fff', border: '1px solid rgba(0,0,0,.06)', borderRadius: 9, cursor: 'pointer' }}
+                style={{ padding: '10px 12px', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 9, cursor: 'pointer' }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'oklch(0.8 0.08 var(--accent-hue))'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(0,0,0,.06)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
               >
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{b.title}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3, lineHeight: 1.45 }}>{b.snippet}</div>
@@ -75,9 +75,9 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
               <div
                 key={u.id}
                 onClick={() => vm.open(u.id)}
-                style={{ padding: '10px 12px', background: '#fff', border: '1px dashed rgba(0,0,0,.16)', borderRadius: 9, cursor: 'pointer' }}
+                style={{ padding: '10px 12px', background: 'var(--bg-surface)', border: '1px dashed var(--border)', borderRadius: 9, cursor: 'pointer' }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'oklch(0.78 0.09 var(--accent-hue))'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(0,0,0,.16)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
               >
                 <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{u.title}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 3, lineHeight: 1.45 }}>{u.snippet}</div>

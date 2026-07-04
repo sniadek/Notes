@@ -220,9 +220,12 @@ export const badgeColors: Record<string, { c: string; b: string }> = {
   md: { c: '#6c7686', b: 'rgba(108,118,134,.14)' },
   html: { c: '#b5651d', b: 'rgba(181,101,29,.14)' },
   eml: { c: '#3a6ea5', b: 'rgba(58,110,165,.14)' },
+  pdf: { c: '#b3382c', b: 'rgba(179,56,44,.14)' },
 };
 
-export const typeLabels: Record<string, string> = { md: 'Markdown', html: 'HTML', eml: 'Outlook Template' };
+export const typeLabels: Record<string, string> = {
+  md: 'Markdown', html: 'HTML', eml: 'Outlook Template', pdf: 'PDF',
+};
 
 export interface SlashDef { label: string; hint: string; ins: string; }
 export const slashDefs: SlashDef[] = [
