@@ -96,10 +96,10 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
     { k: 'preview', label: 'preview' },
   ];
   const railOn = !state.railHidden && vm.showRightSidebar && !!active;
-  // The edit/split/preview toggle has no effect on a PDF (always preview-only), so hide it
-  // when the focused tab (whichever one Toolbar controls) is one.
+  // The edit/split/preview toggle has no effect on a PDF or image (always preview-only), so hide
+  // it when the focused tab (whichever one Toolbar controls) is one.
   const focusedFile = (state.secondaryFocused && vm.secondary.file) ? vm.secondary.file : active;
-  const showViewToggle = focusedFile?.type !== 'pdf';
+  const showViewToggle = focusedFile?.type !== 'pdf' && focusedFile?.type !== 'image';
 
   return (
     <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: 'var(--bg-bar)', borderBottom: '1px solid var(--border)', flex: 'none', padding: '0 16px', gap: 14 }}>

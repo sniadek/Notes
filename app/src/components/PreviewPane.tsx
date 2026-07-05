@@ -12,13 +12,14 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
   const doc = secondary
     ? vm.secondary
     : {
-        id: vm.active?.id ?? null, file: vm.active, isMd: vm.isMd, isHtml: vm.isHtml, isEml: vm.isEml, isPdf: vm.isPdf,
+        id: vm.active?.id ?? null, file: vm.active, isMd: vm.isMd, isHtml: vm.isHtml, isEml: vm.isEml, isPdf: vm.isPdf, isImage: vm.isImage,
         sourceValue: vm.sourceValue, mdHtml: vm.mdHtml, emlData: vm.emlData,
         previewElRef: vm.previewElRef, onPreviewClick: vm.onPreviewClick,
       };
-  const { isMd, isHtml, isEml, isPdf, sourceValue, mdHtml, emlData, file } = doc;
+  const { isMd, isHtml, isEml, isPdf, isImage, sourceValue, mdHtml, emlData, file } = doc;
   const htmlFrameRef = useRef<HTMLIFrameElement | null>(null);
   const [pdfSrc, setPdfSrc] = useState<string | null>(null);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isPdf || !vm.isTauri || !file?.path) { setPdfSrc(null); return; }
@@ -27,10 +28,17 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
     return () => { cancelled = true; };
   }, [isPdf, vm.isTauri, file?.path]);
 
+  useEffect(() => {
+    if (!isImage || !vm.isTauri || !file?.path) { setImageSrc(null); return; }
+    let cancelled = false;
+    assetUrl(file.path).then((url) => { if (!cancelled) setImageSrc(url); });
+    return () => { cancelled = true; };
+  }, [isImage, vm.isTauri, file?.path]);
+
   const paneStyle = {
     flex: 1, minWidth: 0, overflow: 'auto',
-    padding: isHtml || isPdf ? '0' : '40px 44px',
-    background: isEml ? 'var(--bg-canvas)' : 'var(--bg-surface)',
+    padding: isHtml || isPdf ? '0' : isImage ? '24px' : '40px 44px',
+    background: isEml ? 'var(--bg-canvas)' : isImage ? 'var(--bg-canvas)' : 'var(--bg-surface)',
   } as const;
 
   if (isMd) {
@@ -143,6 +151,27 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-faint)', font: '13px -apple-system,system-ui' }}>
             PDF preview requires a connected vault.
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isImage) {
+    return (
+      <div className="sc" style={paneStyle}>
+        {imageSrc ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+            <img
+              key={file?.id}
+              src={imageSrc}
+              alt={file?.title || ''}
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: 8, boxShadow: '0 6px 24px -10px rgba(0,0,0,.25)' }}
+            />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-faint)', font: '13px -apple-system,system-ui' }}>
+            Image preview requires a connected vault.
           </div>
         )}
       </div>

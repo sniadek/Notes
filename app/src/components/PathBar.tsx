@@ -14,7 +14,7 @@ export default function PathBar({ vm, pane = 'primary' }: { vm: NotesAppVM; pane
   const exportOpen = secondary ? state.exportOpenSecondary : state.exportOpen;
   const setExportOpen = (open: boolean) => setState(secondary ? { exportOpenSecondary: open } : { exportOpen: open });
 
-  const canExport = !!file && file.type !== 'pdf';
+  const canExport = !!file && file.type !== 'pdf' && file.type !== 'image';
   const exportItems = canExport ? [
     { icon: '⎙', label: 'Print / Save as PDF', onClick: () => { setExportOpen(false); vm.exportPrint(targetId); } },
     { icon: '↓', label: 'Download ' + (isHtml ? '.html' : isEml ? '.eml' : '.md'), onClick: () => { setExportOpen(false); vm.exportDownload(targetId); } },

@@ -100,9 +100,15 @@ function withoutId(order: string[], id: string): string[] {
 // Extension matching is case-insensitive (a vault can contain "Report.PDF" as easily as
 // "report.pdf") — used both for freshly-discovered files and to self-heal any file whose
 // stored type disagrees with what its actual filename says (see refreshVault).
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']);
+
 function typeFromFilename(name: string): FileType {
   const ext = (name.split('.').pop() || '').toLowerCase();
-  return ext === 'html' ? 'html' : ext === 'eml' ? 'eml' : ext === 'pdf' ? 'pdf' : 'md';
+  if (ext === 'html') return 'html';
+  if (ext === 'eml') return 'eml';
+  if (ext === 'pdf') return 'pdf';
+  if (IMAGE_EXTS.has(ext)) return 'image';
+  return 'md';
 }
 
 // Used when reconciling two dynamicFiles entries that turned out to represent the same
@@ -157,6 +163,7 @@ interface DerivedDoc {
   isHtml: boolean;
   isEml: boolean;
   isPdf: boolean;
+  isImage: boolean;
   sourceValue: string;
   outline: ReturnType<typeof outlineMd>;
   words: number;
@@ -177,6 +184,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
   const isHtml = file?.type === 'html';
   const isEml = file?.type === 'eml';
   const isPdf = file?.type === 'pdf';
+  const isImage = file?.type === 'image';
   let sourceValue = '';
   let outline: ReturnType<typeof outlineMd> = [];
   let words = 0;
@@ -210,7 +218,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
     }
   }
 
-  return { isMd, isHtml, isEml, isPdf, sourceValue, outline, words, activeTags, frontMatter, emlData, mdHtml, codeBlocks, mermaidBlocks };
+  return { isMd, isHtml, isEml, isPdf, isImage, sourceValue, outline, words, activeTags, frontMatter, emlData, mdHtml, codeBlocks, mermaidBlocks };
 }
 
 export function useNotesApp(showRightSidebar = true) {
@@ -479,7 +487,8 @@ export function useNotesApp(showRightSidebar = true) {
     if (!src) return;
     const title = src.title + ' copy';
     const id = 'note-' + slug(title) + '-' + Date.now();
-    const file = slug(title) + (src.type === 'md' ? '.md' : src.type === 'html' ? '.html' : src.type === 'pdf' ? '.pdf' : '.eml');
+    const srcDot = src.file.lastIndexOf('.');
+    const file = slug(title) + (srcDot === -1 ? '' : src.file.slice(srcDot));
     const body = stateRef.current.sources[srcId] || '';
     const nf: NoteFile = { id, title, file, type: src.type, folder: src.folder, parent: src.parent, pinned: false };
     if (isTauri() && stateRef.current.vaultRoot && src.path) {
@@ -603,7 +612,7 @@ export function useNotesApp(showRightSidebar = true) {
     // self-heals on next refresh.
     const backfillFiles = backfills.map((b) => ({ ...current.find((f) => f.id === b.id)!, path: b.path }));
     const stale = current.filter((f) => (
-      f.path && !dropIds.has(f.id) && !backfills.some((b) => b.id === f.id) && f.type !== 'pdf'
+      f.path && !dropIds.has(f.id) && !backfills.some((b) => b.id === f.id) && f.type !== 'pdf' && f.type !== 'image'
       && (f.type === 'eml' ? !(f.id in stateRef.current.eml) : !(f.id in stateRef.current.sources))
     ));
     const toRead = [...added, ...stale, ...backfillFiles];
@@ -611,9 +620,9 @@ export function useNotesApp(showRightSidebar = true) {
     const newEml: Record<string, EmlData> = {};
     if (toRead.length) {
       await Promise.all(toRead.map(async (f) => {
-        // PDFs are binary — never read as UTF-8 text; PreviewPane points an iframe straight
-        // at the file on disk via the asset protocol instead.
-        if (!f.path || f.type === 'pdf') return;
+        // PDFs and images are binary — never read as UTF-8 text; PreviewPane points an iframe/img
+        // straight at the file on disk via the asset protocol instead.
+        if (!f.path || f.type === 'pdf' || f.type === 'image') return;
         const raw = await readFile(f.path).catch(() => null);
         if (raw === null) return;
         if (f.type === 'eml') newEml[f.id] = parseEml(raw);
@@ -1036,10 +1045,11 @@ export function useNotesApp(showRightSidebar = true) {
   const isHtml = active?.type === 'html';
   const isEml = active?.type === 'eml';
   const isPdf = active?.type === 'pdf';
+  const isImage = active?.type === 'image';
   const activeView = viewOf(state.activeId);
-  // PDFs are preview-only, always — the stored per-tab view mode never applies to them.
-  const showSource = !!active && !isPdf && (activeView === 'edit' || activeView === 'split');
-  const showPreview = !!active && (isPdf || activeView === 'preview' || activeView === 'split');
+  // PDFs and images are preview-only, always — the stored per-tab view mode never applies to them.
+  const showSource = !!active && !isPdf && !isImage && (activeView === 'edit' || activeView === 'split');
+  const showPreview = !!active && (isPdf || isImage || activeView === 'preview' || activeView === 'split');
 
   const primaryDoc = deriveDoc(active, state.sources, state.eml, state.wiki, '');
   const {
@@ -1057,8 +1067,9 @@ export function useNotesApp(showRightSidebar = true) {
   // between these and the primary showSource/showPreview above based on state.secondaryFocused).
   const secondaryView = viewOf(state.secondaryId);
   const secondaryIsPdf = secondaryFile?.type === 'pdf';
-  const secondaryShowSource = !!secondaryFile && !secondaryIsPdf && (secondaryView === 'edit' || secondaryView === 'split');
-  const secondaryShowPreview = !!secondaryFile && (secondaryIsPdf || secondaryView === 'preview' || secondaryView === 'split');
+  const secondaryIsImage = secondaryFile?.type === 'image';
+  const secondaryShowSource = !!secondaryFile && !secondaryIsPdf && !secondaryIsImage && (secondaryView === 'edit' || secondaryView === 'split');
+  const secondaryShowPreview = !!secondaryFile && (secondaryIsPdf || secondaryIsImage || secondaryView === 'preview' || secondaryView === 'split');
 
   // The document actually in focus (the secondary pane when it's the one last interacted with,
   // otherwise the primary) — same resolution used by focusedNoteId() for editing, and by
@@ -1485,8 +1496,8 @@ export function useNotesApp(showRightSidebar = true) {
     const f = fileOf(id);
     const title = newTitle.trim();
     if (!f || !title || title === f.title) return;
-    const ext = f.type === 'md' ? '.md' : f.type === 'html' ? '.html' : f.type === 'pdf' ? '.pdf' : '.eml';
-    const file = slug(title) + ext;
+    const fDot = f.file.lastIndexOf('.');
+    const file = slug(title) + (fDot === -1 ? '' : f.file.slice(fDot));
     let newPath: string | undefined;
     if (isTauri() && stateRef.current.vaultRoot && f.path) {
       newPath = vaultPath(f.folder, file);
@@ -1720,6 +1731,7 @@ export function useNotesApp(showRightSidebar = true) {
     isHtml: secondaryDoc.isHtml,
     isEml: secondaryDoc.isEml,
     isPdf: secondaryDoc.isPdf,
+    isImage: secondaryDoc.isImage,
     sourceValue: secondaryDoc.sourceValue,
     mdHtml: secondaryDoc.mdHtml,
     emlData: secondaryDoc.emlData,
@@ -1738,7 +1750,7 @@ export function useNotesApp(showRightSidebar = true) {
     state, setState, stateRef,
     all, fileOf, fileTags, allFiles: all,
     badgeColors, typeLabels,
-    active, isMd, isHtml, isEml, isPdf, showSource, showPreview, currentView, setView,
+    active, isMd, isHtml, isEml, isPdf, isImage, showSource, showPreview, currentView, setView,
     sourceValue, mdHtml, outline, words, activeTags, frontMatter, emlData,
     backlinks, backlinkCount: backlinks.length, unlinked, graph, paletteResults, runPaletteResult,
     findCount, replaceAllFn, findNextFn,
