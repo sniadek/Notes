@@ -9,6 +9,7 @@ import { loadPersistedState, savePersistedState, type PersistedState } from '../
 import {
   diffLines, htmlToMd, mdToHtml, outlineHtml, outlineMd, parseEml, parseFront, slug, wordCount,
 } from '../lib/markdown';
+import type { FrontMatter } from '../lib/markdown';
 import { agoLabel, dailyTitle, download, escapeRegExp, nowStamp, openInBrowser } from '../lib/utils';
 import {
   copyFile as tauriCopyFile, createFile as tauriCreateFile, deleteFile as tauriDeleteFile, isTauri,
@@ -160,6 +161,7 @@ interface DerivedDoc {
   outline: ReturnType<typeof outlineMd>;
   words: number;
   activeTags: string[];
+  frontMatter: FrontMatter;
   emlData: EmlData;
   mdHtml: string;
   codeBlocks: Record<string, string>;
@@ -179,6 +181,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
   let outline: ReturnType<typeof outlineMd> = [];
   let words = 0;
   let activeTags: string[] = [];
+  let frontMatter: FrontMatter = { body: '', offset: 0, tags: [], extra: {} };
   let emlData: EmlData = { from: '', to: '', subject: '', body: '' };
   let mdHtml = '';
   let codeBlocks: Record<string, string> = {};
@@ -188,6 +191,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
     if (isMd) {
       sourceValue = sources[file.id] || '';
       const fr = parseFront(sourceValue);
+      frontMatter = fr;
       words = wordCount(fr.body);
       outline = outlineMd(fr.body);
       activeTags = fr.tags;
@@ -206,7 +210,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
     }
   }
 
-  return { isMd, isHtml, isEml, isPdf, sourceValue, outline, words, activeTags, emlData, mdHtml, codeBlocks, mermaidBlocks };
+  return { isMd, isHtml, isEml, isPdf, sourceValue, outline, words, activeTags, frontMatter, emlData, mdHtml, codeBlocks, mermaidBlocks };
 }
 
 export function useNotesApp(showRightSidebar = true) {
@@ -284,6 +288,12 @@ export function useNotesApp(showRightSidebar = true) {
     return parseFront(state.sources[id] || '').tags;
   }, [fileOf, state.sources]);
 
+  const fileFrontMatter = useCallback((id: string): FrontMatter => {
+    const f = fileOf(id);
+    if (!f || f.type !== 'md') return { body: '', offset: 0, tags: [], extra: {} };
+    return parseFront(state.sources[id] || '');
+  }, [fileOf, state.sources]);
+
   // refs
   const sourceElRef = useRef<HTMLTextAreaElement | null>(null);
   const previewElRef = useRef<HTMLDivElement | null>(null);
@@ -341,6 +351,19 @@ export function useNotesApp(showRightSidebar = true) {
       if (act === id) act = tabs[tabs.length - 1] || null;
       return { openTabs: tabs, activeId: act, secondaryId: sec, secondaryFocused: dissolved ? false : s.secondaryFocused };
     });
+  }, [setState]);
+
+  const closeAllTabs = useCallback(() => {
+    setState({ openTabs: [], activeId: null, secondaryId: null, secondaryFocused: false });
+  }, [setState]);
+
+  const closeOtherTabs = useCallback((keepId: string) => {
+    setState((s) => ({
+      openTabs: s.openTabs.includes(keepId) ? [keepId] : s.openTabs,
+      activeId: keepId,
+      secondaryId: null,
+      secondaryFocused: false,
+    }));
   }, [setState]);
 
   const openSplit = useCallback((id: string) => {
@@ -1020,7 +1043,7 @@ export function useNotesApp(showRightSidebar = true) {
 
   const primaryDoc = deriveDoc(active, state.sources, state.eml, state.wiki, '');
   const {
-    sourceValue, outline, words, activeTags, emlData, mdHtml,
+    sourceValue, outline, words, activeTags, frontMatter, emlData, mdHtml,
   } = primaryDoc;
   codeBlocksRef.current = primaryDoc.codeBlocks;
   mermaidBlocksRef.current = primaryDoc.mermaidBlocks;
@@ -1296,6 +1319,19 @@ export function useNotesApp(showRightSidebar = true) {
     return m;
   }, [all, fileTags, state.sources]);
 
+  // distinct frontmatter `type` values and `extra` key names seen across the vault —
+  // used only to populate smart-filter datalist suggestions, same role tagCount plays for tags.
+  const conceptTypeOptions = useMemo(() => {
+    const s = new Set<string>();
+    all.forEach((f) => { const t = fileFrontMatter(f.id).type; if (t) s.add(t); });
+    return [...s].sort();
+  }, [all, fileFrontMatter]);
+  const frontmatterKeyOptions = useMemo(() => {
+    const s = new Set<string>();
+    all.forEach((f) => Object.keys(fileFrontMatter(f.id).extra).forEach((k) => s.add(k)));
+    return [...s].sort();
+  }, [all, fileFrontMatter]);
+
   // folders + note ordering
   const orderIndex = useMemo(() => {
     const m = new Map<string, number>();
@@ -1518,9 +1554,23 @@ export function useNotesApp(showRightSidebar = true) {
       }
       case 'createdAfter': return (stateRef.current.createdAt[f.id] || 0) >= Date.parse(rule.value);
       case 'createdBefore': return (stateRef.current.createdAt[f.id] || 0) <= Date.parse(rule.value);
+      case 'conceptType': return (fileFrontMatter(f.id).type || '').toLowerCase() === rule.value.toLowerCase();
+      case 'frontmatterTitle': return (fileFrontMatter(f.id).title || '').toLowerCase().includes(rule.value.toLowerCase());
+      case 'description': return (fileFrontMatter(f.id).description || '').toLowerCase().includes(rule.value.toLowerCase());
+      case 'resource': return (fileFrontMatter(f.id).resource || '').toLowerCase().includes(rule.value.toLowerCase());
+      case 'timestampAfter': return Date.parse(fileFrontMatter(f.id).timestamp || '') >= Date.parse(rule.value);
+      case 'timestampBefore': return Date.parse(fileFrontMatter(f.id).timestamp || '') <= Date.parse(rule.value);
+      case 'frontmatterKey': {
+        const sep = rule.value.indexOf(':');
+        const key = (sep === -1 ? rule.value : rule.value.slice(0, sep)).trim();
+        const needle = (sep === -1 ? '' : rule.value.slice(sep + 1)).trim().toLowerCase();
+        const extraValue = fileFrontMatter(f.id).extra[key];
+        if (extraValue === undefined) return false;
+        return needle === '' || extraValue.toLowerCase().includes(needle);
+      }
       default: return true;
     }
-  }, [bodyOf, fileTags]);
+  }, [bodyOf, fileTags, fileFrontMatter]);
 
   // Takes customFilters explicitly (rather than closing over state.customFilters) so callers
   // that just created a custom filter in the same tick (applyFilter, below) can pass the fresh
@@ -1674,6 +1724,7 @@ export function useNotesApp(showRightSidebar = true) {
     mdHtml: secondaryDoc.mdHtml,
     emlData: secondaryDoc.emlData,
     words: secondaryDoc.words,
+    frontMatter: secondaryDoc.frontMatter,
     backlinks: (secondaryFile && backlinkMap[secondaryFile.id]) || [],
     previewElRef: previewElRef2,
     onPreviewClick: onPreviewClickSecondary,
@@ -1688,12 +1739,12 @@ export function useNotesApp(showRightSidebar = true) {
     all, fileOf, fileTags, allFiles: all,
     badgeColors, typeLabels,
     active, isMd, isHtml, isEml, isPdf, showSource, showPreview, currentView, setView,
-    sourceValue, mdHtml, outline, words, activeTags, emlData,
+    sourceValue, mdHtml, outline, words, activeTags, frontMatter, emlData,
     backlinks, backlinkCount: backlinks.length, unlinked, graph, paletteResults, runPaletteResult,
     findCount, replaceAllFn, findNextFn,
     suggestItems, suggestTitle, pickSuggest,
     canHistory, historyFile, historyList: hist, snap, diffRows, saveSnapshot, restore,
-    recentDocs, recentlyCreated, tagCount, folderTree, pathSegments,
+    recentDocs, recentlyCreated, tagCount, fileFrontMatter, conceptTypeOptions, frontmatterKeyOptions, folderTree, pathSegments,
     secondaryPathSegments, secondaryActiveTags, secondaryCanHistory,
     pinnedFiles, pinnedFolderPaths,
     accent: ACCENT, accentSoft: ACCENT_SOFT,
@@ -1703,7 +1754,7 @@ export function useNotesApp(showRightSidebar = true) {
     // split pane
     secondary, openSplit, closeSplitPane, pairTabs, reorderTab,
     // actions
-    open, closeTab, touch, setSource, setEml, aiGenerate, toggleTask, openOrCreate,
+    open, closeTab, closeAllTabs, closeOtherTabs, touch, setSource, setEml, aiGenerate, toggleTask, openOrCreate,
     tasks, taskCounts,
     openAddTask, closeAddTask, saveAddTask, addTaskLine, openTaskManager, ensureDaily, openDaily,
     currentExportHtml, exportPrint, exportDownload, exportDoc, exportCopyHtml,

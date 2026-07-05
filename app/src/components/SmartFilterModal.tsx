@@ -11,6 +11,13 @@ const FIELD_OPTIONS: { value: FilterField; label: string }[] = [
   { value: 'filename', label: 'Filename contains' },
   { value: 'createdAfter', label: 'Created after' },
   { value: 'createdBefore', label: 'Created before' },
+  { value: 'conceptType', label: 'Concept Type' },
+  { value: 'frontmatterTitle', label: 'Frontmatter Title contains' },
+  { value: 'description', label: 'Description contains' },
+  { value: 'resource', label: 'Resource contains' },
+  { value: 'timestampAfter', label: 'Timestamp after' },
+  { value: 'timestampBefore', label: 'Timestamp before' },
+  { value: 'frontmatterKey', label: 'Custom field' },
 ];
 
 const COLORS = ['#8a8a93', '#6c7686', '#b5651d', '#3a6ea5', '#4a8f5c', '#a3466b'];
@@ -30,7 +37,9 @@ function defaultValueFor(field: FilterField): string {
 }
 
 export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
-  const { state, tagCount, allFolderNames } = vm;
+  const {
+    state, tagCount, allFolderNames, conceptTypeOptions, frontmatterKeyOptions,
+  } = vm;
   const editing = state.editingFilterId ? state.customFilters.find((c) => c.id === state.editingFilterId) : undefined;
 
   const [label, setLabel] = useState(editing?.label || '');
@@ -154,12 +163,43 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
                     style={inputStyle}
                   />
                 )}
-                {(rule.field === 'text' || rule.field === 'filename') && (
+                {(rule.field === 'text' || rule.field === 'filename' || rule.field === 'frontmatterTitle' || rule.field === 'description' || rule.field === 'resource') && (
                   <input value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} placeholder="value" style={inputStyle} />
                 )}
-                {(rule.field === 'createdAfter' || rule.field === 'createdBefore') && (
+                {(rule.field === 'createdAfter' || rule.field === 'createdBefore' || rule.field === 'timestampAfter' || rule.field === 'timestampBefore') && (
                   <input type="date" value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle} />
                 )}
+                {rule.field === 'conceptType' && (
+                  <input
+                    list="filter-concept-type-options"
+                    value={rule.value}
+                    onChange={(e) => updateRule(i, { value: e.target.value })}
+                    placeholder="concept type"
+                    style={inputStyle}
+                  />
+                )}
+                {rule.field === 'frontmatterKey' && (() => {
+                  const sep = rule.value.indexOf(':');
+                  const key = sep === -1 ? rule.value : rule.value.slice(0, sep);
+                  const val = sep === -1 ? '' : rule.value.slice(sep + 1);
+                  return (
+                    <>
+                      <input
+                        list="filter-frontmatter-key-options"
+                        value={key}
+                        onChange={(e) => updateRule(i, { value: e.target.value + ':' + val })}
+                        placeholder="key"
+                        style={{ ...inputStyle, flex: 'none', width: 100 }}
+                      />
+                      <input
+                        value={val}
+                        onChange={(e) => updateRule(i, { value: key + ':' + e.target.value })}
+                        placeholder="value"
+                        style={inputStyle}
+                      />
+                    </>
+                  );
+                })()}
 
                 <span onClick={() => removeRule(i)} style={{ marginLeft: 'auto', color: 'var(--text-faintest)', fontSize: 14, cursor: 'pointer', padding: '0 4px', flex: 'none' }}>×</span>
               </div>
@@ -167,6 +207,12 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
           </div>
           <datalist id="filter-tag-options">
             {tagNames.map((t) => <option key={t} value={t} />)}
+          </datalist>
+          <datalist id="filter-concept-type-options">
+            {conceptTypeOptions.map((t) => <option key={t} value={t} />)}
+          </datalist>
+          <datalist id="filter-frontmatter-key-options">
+            {frontmatterKeyOptions.map((k) => <option key={k} value={k} />)}
           </datalist>
 
           <div onClick={addRule} style={{ marginTop: 10, font: '500 12.5px -apple-system,system-ui', color: 'var(--accent)', cursor: 'pointer' }}>
