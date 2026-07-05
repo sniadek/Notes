@@ -57,7 +57,7 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
       vm.updateCustomFilter(editing.id, payload);
     } else {
       const id = vm.createCustomFilter(payload);
-      vm.setState({ filter: 'custom:' + id });
+      vm.applyFilter('custom:' + id);
     }
     close();
   };

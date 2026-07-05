@@ -1522,8 +1522,10 @@ export function useNotesApp(showRightSidebar = true) {
     }
   }, [bodyOf, fileTags]);
 
-  const pred = useCallback((f: NoteFile): boolean => {
-    const k = state.filter;
+  // Takes customFilters explicitly (rather than closing over state.customFilters) so callers
+  // that just created a custom filter in the same tick (applyFilter, below) can pass the fresh
+  // list threaded through their own setState updater instead of last render's stale one.
+  const matchesFilterKeyIn = useCallback((f: NoteFile, k: string, customFilters: CustomFilter[]): boolean => {
     if (k === 'all') return true;
     if (k === 'pinned') return f.pinned;
     if (k === 'markdown') return f.type === 'md';
@@ -1531,12 +1533,38 @@ export function useNotesApp(showRightSidebar = true) {
     if (k === 'email') return f.type === 'eml';
     if (k.startsWith('tag:')) return fileTags(f.id).includes(k.slice(4));
     if (k.startsWith('custom:')) {
-      const cf = state.customFilters.find((c) => c.id === k.slice(7));
+      const cf = customFilters.find((c) => c.id === k.slice(7));
       if (!cf || !cf.rules.length) return true;
       return cf.match === 'all' ? cf.rules.every((r) => matchesRule(f, r)) : cf.rules.some((r) => matchesRule(f, r));
     }
     return true;
-  }, [fileTags, matchesRule, state.customFilters, state.filter]);
+  }, [fileTags, matchesRule]);
+
+  const pred = useCallback((f: NoteFile) => matchesFilterKeyIn(f, state.filter, state.customFilters), [matchesFilterKeyIn, state.filter, state.customFilters]);
+
+  // Applying a filter should immediately reveal its matches — force-expand every folder
+  // (and, for nested docs, every ancestor note) that contains at least one matching file,
+  // instead of leaving a previously-collapsed folder/doc hiding the only visible result.
+  const applyFilter = useCallback((key: string, extra?: Partial<FullState>) => {
+    setState((s) => {
+      const nextExpanded = { ...s.expandedDocs };
+      if (key !== 'all') {
+        all.forEach((f) => {
+          if (!matchesFilterKeyIn(f, key, s.customFilters)) return;
+          let p: string | undefined = f.folder;
+          while (p) { nextExpanded['folder:' + p] = true; p = folderParentPath(p); }
+          let pid = f.parent;
+          while (pid) {
+            const pf = fileOf(pid);
+            if (!pf) break;
+            nextExpanded[pid] = true;
+            pid = pf.parent;
+          }
+        });
+      }
+      return { filter: key, expandedDocs: nextExpanded, ...extra };
+    });
+  }, [all, matchesFilterKeyIn, fileOf, setState]);
 
   const createCustomFilter = useCallback((filter: Omit<CustomFilter, 'id'>): string => {
     const id = 'filter-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
@@ -1684,7 +1712,7 @@ export function useNotesApp(showRightSidebar = true) {
     agoLabel,
     childrenOf, newFile, duplicateFile, moveFileTo, deleteFile, toggleExpand, pickVaultRoot, refreshVault,
     reorderNote, reorderFolder, depthOf, renameFile, collapseAllFolders, createFolder,
-    createCustomFilter, updateCustomFilter, deleteCustomFilter, openSmartFilterCreator, closeSmartFilterModal,
+    createCustomFilter, updateCustomFilter, deleteCustomFilter, openSmartFilterCreator, closeSmartFilterModal, applyFilter,
     customFilterCounts, togglePinFile, togglePinFolder, revealFile, revealFolder,
     allFolderNames: state.folderOrder,
     maxFolderDepth: MAX_FOLDER_DEPTH,

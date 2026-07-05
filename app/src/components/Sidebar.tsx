@@ -377,7 +377,7 @@ function PinnedFolderRow({ vm, path, cowork }: { vm: NotesAppVM; path: string; c
 
 export default function Sidebar({ vm }: { vm: NotesAppVM }) {
   const {
-    state, setState, all, folderTree, tagCount, recentDocs, recentlyCreated, pinnedFiles, pinnedFolderPaths,
+    state, all, folderTree, tagCount, recentDocs, recentlyCreated, pinnedFiles, pinnedFolderPaths,
   } = vm;
   const cowork = state.design === 'cowork-plus';
   const defs = filterDefs(all);
@@ -409,7 +409,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
           return (
             <div
               key={f.key}
-              onClick={() => setState({ filter: f.key, collapsed: false })}
+              onClick={() => vm.applyFilter(f.key, { collapsed: false })}
               title={f.label}
               style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: on ? ACCENT_SOFT : 'transparent' }}
             >
@@ -477,7 +477,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             return (
               <div
                 key={f.key}
-                onClick={() => setState({ filter: f.key })}
+                onClick={() => vm.applyFilter(f.key)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
                   ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
@@ -500,7 +500,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             return (
               <div
                 key={cf.id}
-                onClick={() => setState({ filter: key })}
+                onClick={() => vm.applyFilter(key)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer', position: 'relative',
                   ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
@@ -641,7 +641,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
               return (
                 <span
                   key={t}
-                  onClick={() => setState({ filter: 'tag:' + t })}
+                  onClick={() => vm.applyFilter('tag:' + t)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 4, font: cowork ? '500 12.5px -apple-system,system-ui' : '500 11px -apple-system,system-ui', padding: cowork ? '4px 10px' : '3px 9px', borderRadius: 11, cursor: 'pointer',
                     ...(on ? { background: 'var(--accent-soft)', color: 'var(--accent-strong)' } : { background: 'var(--bg-subtle)', color: 'var(--text-muted)' }),
