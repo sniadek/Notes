@@ -3,10 +3,49 @@ import type { NotesAppVM } from '../hooks/useNotesApp';
 const sectionLabel = { font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em', marginBottom: 12 } as const;
 
 export default function ContextRail({ vm }: { vm: NotesAppVM }) {
-  const { outline, backlinks, unlinked, active, childrenOf } = vm;
+  const {
+    outline, backlinks, unlinked, active, childrenOf, frontMatter,
+  } = vm;
   const subPages = active ? childrenOf(active.id) : [];
+  const extraEntries = Object.entries(frontMatter.extra);
+  const hasFrontMatter = !!(frontMatter.type || frontMatter.description || frontMatter.resource || frontMatter.timestamp || frontMatter.tags.length || extraEntries.length);
+  const isWebResource = !!frontMatter.resource && /^https?:\/\//.test(frontMatter.resource);
   return (
     <div className="sc" style={{ width: 250, background: 'var(--bg-bar)', borderLeft: '1px solid var(--border)', overflow: 'auto', flex: 'none', padding: '22px 18px' }}>
+      <div style={sectionLabel}>FRONTMATTER</div>
+      {hasFrontMatter
+        ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginBottom: 28 }}>
+            {frontMatter.type && (
+              <span
+                style={{
+                  alignSelf: 'flex-start', font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-secondary)',
+                  background: 'var(--bg-subtle)', border: '1px solid var(--border)', padding: '3px 8px', borderRadius: 6,
+                }}
+              >
+                {frontMatter.type}
+              </span>
+            )}
+            {frontMatter.description && (
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>{frontMatter.description}</div>
+            )}
+            {frontMatter.resource && (
+              isWebResource
+                ? <a href={frontMatter.resource} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--accent)', wordBreak: 'break-all' }}>{frontMatter.resource}</a>
+                : <div style={{ fontSize: 11, color: 'var(--text-faint)', wordBreak: 'break-all' }}>{frontMatter.resource}</div>
+            )}
+            {frontMatter.timestamp && (
+              <div style={{ font: '10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>{frontMatter.timestamp}</div>
+            )}
+            {extraEntries.map(([k, v]) => (
+              <div key={k} style={{ fontSize: 11, color: 'var(--text-faint)' }}>
+                <span style={{ color: 'var(--text-faintest)' }}>{k}:</span> {v}
+              </div>
+            ))}
+          </div>
+        )
+        : <div style={{ font: '400 12px -apple-system,system-ui', color: '#c4c0b6', marginBottom: 28 }}>No frontmatter</div>}
+
       {subPages.length > 0 && (
         <>
           <div style={sectionLabel}>SUB-PAGES · {subPages.length}</div>

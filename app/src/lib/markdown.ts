@@ -1,7 +1,17 @@
+// OKF (Open Knowledge Format) recommends these keys; `type` here is the
+// concept's knowledge type (e.g. "BigQuery Table") — unrelated to
+// NoteFile.type, which is the file's storage format (md/html/eml/pdf).
+// Don't conflate the two at call sites.
 export interface FrontMatter {
   body: string;
-  tags: string[];
   offset: number;
+  type?: string;
+  title?: string;
+  description?: string;
+  resource?: string;
+  timestamp?: string;
+  tags: string[];
+  extra: Record<string, string>;
 }
 
 export function slug(t: string): string {
@@ -12,19 +22,41 @@ export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function unquote(v: string): string {
+  const t = v.trim();
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith('\'') && t.endsWith('\''))) return t.slice(1, -1);
+  return t;
+}
+
+const KNOWN_FRONT_KEYS = new Set(['type', 'title', 'description', 'resource', 'timestamp', 'tags']);
+
 export function parseFront(md: string): FrontMatter {
-  if (md.slice(0, 4) !== '---\n') return { body: md, tags: [], offset: 0 };
+  const empty: FrontMatter = { body: md, tags: [], extra: {}, offset: 0 };
+  if (md.slice(0, 4) !== '---\n') return empty;
   const end = md.indexOf('\n---', 4);
-  if (end === -1) return { body: md, tags: [], offset: 0 };
+  if (end === -1) return empty;
   const block = md.slice(4, end);
   const after = md.slice(end + 4).replace(/^\n/, '');
-  let tags: string[] = [];
-  block.split('\n').forEach((l) => {
-    const m = /^tags:\s*(.+)$/.exec(l.trim());
-    if (m) tags = m[1].replace(/[[\]]/g, '').split(',').map((s) => s.trim()).filter(Boolean);
-  });
   const offset = md.slice(0, md.length - after.length).split('\n').length - 1;
-  return { body: after, tags, offset };
+  let tags: string[] = [];
+  const extra: Record<string, string> = {};
+  const fields: Partial<Pick<FrontMatter, 'type' | 'title' | 'description' | 'resource' | 'timestamp'>> = {};
+  // Only flat `key: value` pairs and an inline `tags: [a, b]` list are
+  // supported — OKF's documented shape doesn't require block-style YAML
+  // lists/maps, so lines that don't match are left out rather than mis-parsed.
+  block.split('\n').forEach((l) => {
+    const m = /^([A-Za-z0-9_-]+):\s*(.*)$/.exec(l.trim());
+    if (!m) return;
+    const [, key, rawValue] = m;
+    if (key === 'tags') {
+      tags = rawValue.replace(/[[\]]/g, '').split(',').map((s) => unquote(s)).filter(Boolean);
+    } else if (KNOWN_FRONT_KEYS.has(key)) {
+      (fields as Record<string, string>)[key] = unquote(rawValue);
+    } else if (rawValue) {
+      extra[key] = unquote(rawValue);
+    }
+  });
+  return { body: after, offset, tags, extra, ...fields };
 }
 
 export function inline(s: string, wiki: boolean): string {

@@ -34,7 +34,11 @@ export type HtmlWidth = 'desktop' | 'tablet' | 'mobile';
 export type DocWidth = 'comfortable' | 'full';
 export type DocFontSize = 'small' | 'medium' | 'large' | 'xlarge';
 
-export type FilterField = 'type' | 'tag' | 'folder' | 'pinned' | 'text' | 'filename' | 'createdAfter' | 'createdBefore';
+export type FilterField =
+  | 'type' | 'tag' | 'folder' | 'pinned' | 'text' | 'filename' | 'createdAfter' | 'createdBefore'
+  // 'conceptType' matches FrontMatter.type (an open, producer-defined string like "Playbook"),
+  // distinct from 'type' above which matches NoteFile.type (the file format: md/html/eml/pdf).
+  | 'conceptType' | 'frontmatterTitle' | 'description' | 'resource' | 'timestampAfter' | 'timestampBefore' | 'frontmatterKey';
 
 export interface FilterRule {
   field: FilterField;

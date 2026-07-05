@@ -72,6 +72,8 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
   const tabListResults = tq
     ? openTabFiles.filter(({ f }) => f.title.toLowerCase().includes(tq) || f.file.toLowerCase().includes(tq))
     : openTabFiles;
+  const canCloseAll = state.openTabs.length > 0;
+  const canCloseOthers = state.openTabs.length > 1 && !!state.activeId;
 
   return (
     <div style={{ display: 'flex', alignItems: 'stretch', height: 40, background: 'var(--bg-tab)', borderBottom: '1px solid var(--border)', flex: 'none' }}>
@@ -281,7 +283,43 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
             }}
           >
             <div style={{ padding: '8px 9px 6px', flex: 'none' }}>
-              <div style={{ font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em', padding: '0 3px 6px' }}>OPEN TABS</div>
+              <div style={{ display: 'flex', alignItems: 'center', padding: '0 3px 6px' }}>
+                <div style={{ font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em' }}>OPEN TABS</div>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
+                  <span
+                    onClick={() => {
+                      if (!canCloseOthers) return;
+                      vm.closeOtherTabs(state.activeId!);
+                      setTabListAnchor(null);
+                    }}
+                    title="Close all tabs except the active one"
+                    style={{
+                      font: '500 11px -apple-system,system-ui', padding: '3px 7px', borderRadius: 6,
+                      color: canCloseOthers ? 'var(--text-muted)' : 'var(--text-faintest)', cursor: canCloseOthers ? 'pointer' : 'default',
+                    }}
+                    onMouseEnter={(e) => { if (canCloseOthers) { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
+                    onMouseLeave={(e) => { if (canCloseOthers) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+                  >
+                    Close Others
+                  </span>
+                  <span
+                    onClick={() => {
+                      if (!canCloseAll) return;
+                      vm.closeAllTabs();
+                      setTabListAnchor(null);
+                    }}
+                    title="Close all open tabs"
+                    style={{
+                      font: '500 11px -apple-system,system-ui', padding: '3px 7px', borderRadius: 6,
+                      color: canCloseAll ? 'var(--text-muted)' : 'var(--text-faintest)', cursor: canCloseAll ? 'pointer' : 'default',
+                    }}
+                    onMouseEnter={(e) => { if (canCloseAll) { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
+                    onMouseLeave={(e) => { if (canCloseAll) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
+                  >
+                    Close All
+                  </span>
+                </div>
+              </div>
               <input
                 ref={tabListInputRef}
                 value={tabListQuery}
