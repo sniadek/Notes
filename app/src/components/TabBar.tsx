@@ -74,7 +74,8 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
     : openTabFiles;
 
   return (
-    <div className="sc" style={{ display: 'flex', alignItems: 'stretch', height: 40, background: 'var(--bg-tab)', borderBottom: '1px solid var(--border)', flex: 'none', overflowX: 'auto' }}>
+    <div style={{ display: 'flex', alignItems: 'stretch', height: 40, background: 'var(--bg-tab)', borderBottom: '1px solid var(--border)', flex: 'none' }}>
+    <div className="sc" style={{ display: 'flex', alignItems: 'stretch', flex: '1 1 auto', overflowX: 'auto', minWidth: 0 }}>
       {state.openTabs.map((id, i) => {
         const f = fileOf(id);
         if (!f) return null;
@@ -183,17 +184,20 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
           </Fragment>
         );
       })}
+    </div>
+    <div style={{ display: 'flex', alignItems: 'stretch', flex: 'none', borderLeft: '1px solid var(--border)' }}>
       <div
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
           setTabListAnchor((a) => (a ? null : { left: rect.right - 280, top: rect.bottom }));
         }}
         title="All open tabs"
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer', flex: 'none' }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '0 8px', color: 'var(--text-tertiary)', fontSize: 12, cursor: 'pointer', flex: 'none' }}
         onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}
         onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
       >
-        ▾
+        <span>▾</span>
+        <span style={{ font: '600 11px ui-monospace,Menlo,monospace', minWidth: 12, textAlign: 'center' }}>{state.openTabs.length}</span>
       </div>
       <div
         onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
@@ -204,6 +208,7 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
       >
         ＋
       </div>
+    </div>
 
       {menu && menuFile && createPortal(
         <>
