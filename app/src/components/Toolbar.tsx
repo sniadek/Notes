@@ -8,7 +8,17 @@ const CLOCKS: { code: string; tz: string }[] = [
   { code: 'PH', tz: 'Asia/Manila' },
 ];
 
-function WorldClock() {
+function useWindowWidth() {
+  const [width, setWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const onResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  return width;
+}
+
+function WorldClock({ hideWeekday, hideSeconds }: { hideWeekday: boolean; hideSeconds: boolean }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), 1000);
@@ -32,9 +42,9 @@ function WorldClock() {
             }}
           >
             <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{c.code}</span>
-            <span>{get('weekday')}</span>
+            {!hideWeekday && <span>{get('weekday')}</span>}
             <span style={{ font: '11px ui-monospace,Menlo,monospace', color: 'var(--text-secondary)' }}>
-              {get('hour')}:{get('minute')}:{get('second')}
+              {get('hour')}:{get('minute')}{!hideSeconds && `:${get('second')}`}
             </span>
           </div>
         );
@@ -88,8 +98,18 @@ function IconBtn({ title, onClick, children, style }: { title: string; onClick: 
   );
 }
 
+const BP_COMPACT_SEARCH = 1100;
+const BP_HIDE_WEEKDAY = 950;
+const BP_HIDE_SECONDS = 870;
+const BP_HIDE_CLOCKS = 810;
+
 export default function Toolbar({ vm }: { vm: NotesAppVM }) {
   const { state, setState, active } = vm;
+  const width = useWindowWidth();
+  const compactSearch = width < BP_COMPACT_SEARCH;
+  const hideWeekday = width < BP_HIDE_WEEKDAY;
+  const hideSeconds = width < BP_HIDE_SECONDS;
+  const hideClocks = width < BP_HIDE_CLOCKS;
   const views: { k: ViewMode; label: string }[] = [
     { k: 'edit', label: 'edit' },
     { k: 'split', label: 'split' },
@@ -116,18 +136,22 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
         </svg>
       </IconBtn>
 
-      <div
-        onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
-        style={{ flex: 1, minWidth: 0, maxWidth: 440, height: 30, borderRadius: 8, background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 9, color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'text', overflow: 'hidden' }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; }}
-      >
-        <span style={{ fontSize: 13, flex: 'none' }}>⌕</span>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Go to file or command</span>
-        <span style={{ marginLeft: 'auto', flex: 'none', font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: 5 }}>⌘K</span>
-      </div>
+      {compactSearch ? (
+        <IconBtn title="Go to file or command (⌘K)" onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })} style={{ fontSize: 13 }}>⌕</IconBtn>
+      ) : (
+        <div
+          onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
+          style={{ flex: 1, minWidth: 0, maxWidth: 440, height: 30, borderRadius: 8, background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 9, color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'text', overflow: 'hidden' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; }}
+        >
+          <span style={{ fontSize: 13, flex: 'none' }}>⌕</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Go to file or command</span>
+          <span style={{ marginLeft: 'auto', flex: 'none', font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)', background: 'var(--bg-surface)', border: '1px solid var(--border)', padding: '2px 6px', borderRadius: 5 }}>⌘K</span>
+        </div>
+      )}
 
-      <WorldClock />
+      {!hideClocks && <WorldClock hideWeekday={hideWeekday} hideSeconds={hideSeconds} />}
 
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12, flex: 'none' }}>
         {showViewToggle && (
