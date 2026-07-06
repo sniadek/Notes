@@ -260,11 +260,14 @@ export function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, 
   );
 }
 
-export function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverId, setDragZone, folderDragOver, setFolderDragOver }: {
+export function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverId, setDragZone, folderDragOver, setFolderDragOver, onNavigate }: {
   vm: NotesAppVM; node: FolderNode; depth: number; cowork: boolean;
   dragOverId: string | null; dragZone: NoteZone | null;
   setDragOverId: (id: string | null) => void; setDragZone: (z: NoteZone | null) => void;
   folderDragOver: FolderDragOver; setFolderDragOver: (v: FolderDragOver) => void;
+  // Only set when rendered inside the folder-tree pane (FolderTreePane), where clicking a
+  // subfolder should drill further in rather than just expanding in place like the sidebar does.
+  onNavigate?: (path: string) => void;
 }) {
   const { state } = vm;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -306,7 +309,7 @@ export function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDr
           if (folderPath && folderPath !== node.path && zone) { vm.reorderFolder(folderPath, node.path, zone); return; }
           if (noteId) vm.moveFileTo(noteId, node.path, undefined);
         }}
-        onClick={() => vm.openFolder(node.path)}
+        onClick={() => { if (onNavigate) onNavigate(node.path); else vm.toggleExpand(folderKey); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 7, padding: cowork ? `7px 11px 7px ${indent}px` : `5px 11px 5px ${indent}px`, fontSize: cowork ? 14.5 : 12.5, color: 'var(--text-secondary)', cursor: 'pointer',
           ...(dragOverId === folderKey ? { outline: '1.5px dashed var(--accent)', borderRadius: 6 } : {}),
@@ -364,7 +367,7 @@ export function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDr
             <FolderRow
               key={child.path} vm={vm} node={child} depth={depth + 1} cowork={cowork}
               dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone}
-              folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver}
+              folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver} onNavigate={onNavigate}
             />
           ))}
         </>

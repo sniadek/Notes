@@ -61,7 +61,7 @@ export default function FolderTreePane({ vm }: { vm: NotesAppVM }) {
           <FolderRow
             key={child.path} vm={vm} node={child} depth={0} cowork={cowork}
             dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone}
-            folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver}
+            folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver} onNavigate={vm.openFolder}
           />
         ))}
         {!node.roots.length && !node.children.length && (
