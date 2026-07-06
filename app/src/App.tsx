@@ -17,6 +17,7 @@ import ShortcutsModal from './components/ShortcutsModal';
 import SettingsModal from './components/SettingsModal';
 import SmartFilterModal from './components/SmartFilterModal';
 import TaskManagerPane from './components/TaskManagerPane';
+import FolderTreePane from './components/FolderTreePane';
 import ResizeHandles from './components/ResizeHandles';
 import { TASK_MANAGER_ID } from './lib/tasks';
 
@@ -40,7 +41,9 @@ export default function App() {
 
           {vm.state.activeId === TASK_MANAGER_ID
             ? <TaskManagerPane vm={vm} />
-            : vm.active
+            : vm.state.activeId?.startsWith('folder:')
+              ? <FolderTreePane vm={vm} />
+              : vm.active
               ? (() => {
                 // Focus (secondaryFocused) no longer gates which pane can show editable source —
                 // each pane renders purely from its own stored view mode (showSource/showPreview,

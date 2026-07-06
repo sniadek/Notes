@@ -29,7 +29,7 @@ export default function PathBar({ vm, pane = 'primary' }: { vm: NotesAppVM; pane
           <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {i > 0 && <span style={{ font: '500 11px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', flex: 'none' }}>/</span>}
             <span
-              onClick={() => { if (seg.id) vm.open(seg.id); }}
+              onClick={() => { if (seg.path) vm.openFolder(seg.path); else if (seg.id) vm.open(seg.id); }}
               title={seg.title}
               style={{
                 font: '500 11px ui-monospace,Menlo,monospace', flex: 'none', whiteSpace: 'nowrap', borderRadius: 5, padding: '2px 5px',

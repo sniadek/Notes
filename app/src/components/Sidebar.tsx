@@ -15,8 +15,8 @@ function SyncCountdown({ lastSyncedAt }: { lastSyncedAt: number }) {
 
 const ACCENT_SOFT = 'var(--accent-soft)';
 
-type NoteZone = 'before' | 'after' | 'inside';
-type FolderDragOver = { path: string; zone: NoteZone } | null;
+export type NoteZone = 'before' | 'after' | 'inside';
+export type FolderDragOver = { path: string; zone: NoteZone } | null;
 
 interface FilterDef {
   key: string;
@@ -54,6 +54,17 @@ const chevronStyle: CSSProperties = {
 };
 
 const menuItemStyle: CSSProperties = { padding: '7px 11px', fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' };
+
+function CalendarIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ flex: 'none' }}>
+      <rect x="2" y="3.5" width="12" height="10.5" rx="2" stroke="var(--text-muted)" strokeWidth="1.3" />
+      <line x1="2" y1="6.5" x2="14" y2="6.5" stroke="var(--text-muted)" strokeWidth="1.3" />
+      <line x1="5" y1="2" x2="5" y2="4.2" stroke="var(--text-muted)" strokeWidth="1.3" strokeLinecap="round" />
+      <line x1="11" y1="2" x2="11" y2="4.2" stroke="var(--text-muted)" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 // Closes an open dropdown/menu on any click outside its container, since none of these
 // "⋯" menus close themselves otherwise — only re-toggling the trigger did.
@@ -108,7 +119,7 @@ function RecentRow({ vm, file, cowork, timestamp }: { vm: NotesAppVM; file: Note
   );
 }
 
-function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, setDragZone }: {
+export function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, setDragZone }: {
   vm: NotesAppVM; file: NoteFile; depth: number;
   dragOverId: string | null; dragZone: NoteZone | null;
   setDragOverId: (id: string | null) => void; setDragZone: (z: NoteZone | null) => void;
@@ -249,11 +260,14 @@ function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, setDrag
   );
 }
 
-function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverId, setDragZone, folderDragOver, setFolderDragOver }: {
+export function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverId, setDragZone, folderDragOver, setFolderDragOver, onNavigate }: {
   vm: NotesAppVM; node: FolderNode; depth: number; cowork: boolean;
   dragOverId: string | null; dragZone: NoteZone | null;
   setDragOverId: (id: string | null) => void; setDragZone: (z: NoteZone | null) => void;
   folderDragOver: FolderDragOver; setFolderDragOver: (v: FolderDragOver) => void;
+  // Only set when rendered inside the folder-tree pane (FolderTreePane), where clicking a
+  // subfolder should drill further in rather than just expanding in place like the sidebar does.
+  onNavigate?: (path: string) => void;
 }) {
   const { state } = vm;
   const [menuOpen, setMenuOpen] = useState(false);
@@ -295,7 +309,7 @@ function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverI
           if (folderPath && folderPath !== node.path && zone) { vm.reorderFolder(folderPath, node.path, zone); return; }
           if (noteId) vm.moveFileTo(noteId, node.path, undefined);
         }}
-        onClick={() => vm.toggleExpand(folderKey)}
+        onClick={() => { if (onNavigate) onNavigate(node.path); else vm.toggleExpand(folderKey); }}
         style={{
           display: 'flex', alignItems: 'center', gap: 7, padding: cowork ? `7px 11px 7px ${indent}px` : `5px 11px 5px ${indent}px`, fontSize: cowork ? 14.5 : 12.5, color: 'var(--text-secondary)', cursor: 'pointer',
           ...(dragOverId === folderKey ? { outline: '1.5px dashed var(--accent)', borderRadius: 6 } : {}),
@@ -304,7 +318,12 @@ function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverI
           ...(fOver === 'after' ? { boxShadow: 'inset 0 -2px 0 var(--accent)' } : {}),
         }}
       >
-        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{folderExpanded ? '▾' : '▸'}</span>
+        <span
+          onClick={(e) => { e.stopPropagation(); vm.toggleExpand(folderKey); }}
+          style={{ color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer' }}
+        >
+          {folderExpanded ? '▾' : '▸'}
+        </span>
         <svg width="14" height="14" viewBox="0 0 16 16" style={{ flex: 'none' }}>
           <path d="M1.5 4.6c0-.6.4-1 1-1h3.1c.3 0 .5.1.7.3l.8.8c.2.2.4.3.7.3h5.2c.6 0 1 .4 1 1v5.7c0 .6-.4 1-1 1H2.5c-.6 0-1-.4-1-1z" fill={cowork ? 'var(--text-faintest)' : '#c9b89a'} />
         </svg>
@@ -348,7 +367,7 @@ function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDragOverI
             <FolderRow
               key={child.path} vm={vm} node={child} depth={depth + 1} cowork={cowork}
               dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone}
-              folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver}
+              folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver} onNavigate={onNavigate}
             />
           ))}
         </>
@@ -403,6 +422,13 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
           {vm.taskCounts > 0 && (
             <span style={{ position: 'absolute', top: 5, right: 6, width: 6, height: 6, borderRadius: '50%', background: '#c0524a' }} />
           )}
+        </div>
+        <div
+          onClick={vm.openDaily}
+          title="Daily Note"
+          style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: state.activeId === vm.dailyNoteId ? ACCENT_SOFT : 'transparent' }}
+        >
+          <CalendarIcon />
         </div>
         {defs.map((f) => {
           const on = state.filter === f.key;
@@ -460,6 +486,17 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
               {vm.taskCounts}
             </span>
           )}
+        </div>
+        <div
+          onClick={vm.openDaily}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
+            padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
+            ...(state.activeId === vm.dailyNoteId ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
+          }}
+        >
+          <span style={{ width: 8, flex: 'none', display: 'flex', justifyContent: 'center' }}><CalendarIcon size={12} /></span>
+          <span style={{ flex: 1 }}>Daily Note</span>
         </div>
         <div style={{ ...sectionLabelStyle(cowork), padding: cowork ? '4px 11px 8px' : '4px 11px 7px', cursor: 'default' }}>
           <span>{cowork ? 'Smart filters' : 'SMART FILTERS'}</span>

@@ -776,10 +776,19 @@ export function useNotesApp(showRightSidebar = true) {
     setTimeout(() => open(id), 0);
   }, [ensureDaily, open]);
 
+  // Lets the sidebar highlight its Daily Note button the same way it highlights Tasks
+  // (state.activeId === TASK_MANAGER_ID) without duplicating the 'daily-' + dailyTitle() id
+  // convention from ensureDaily above.
+  const dailyNoteId = 'daily-' + dailyTitle();
+
   // Dissolves any active split — the Task Manager is a full-page view, not a split partner,
   // and leaving a stale secondaryId behind would make its old tab a dead click (it'd hit the
   // no-op branch in open() instead of switching away from the Task Manager).
   const openTaskManager = useCallback(() => setState({ activeId: TASK_MANAGER_ID, secondaryId: null }), [setState]);
+
+  // Folder tree pane — same "full-page view, not a split partner" shape as the Task Manager
+  // above, but keyed per-folder via a synthetic 'folder:<path>' id instead of one constant.
+  const openFolder = useCallback((path: string) => setState({ activeId: 'folder:' + path, secondaryId: null }), [setState]);
 
   const openAddTask = useCallback(() => setState({
     addTaskOpen: true, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
@@ -1009,6 +1018,7 @@ export function useNotesApp(showRightSidebar = true) {
       else if (meta && k === 'g') { e.preventDefault(); setState((s2) => ({ graphOpen: !s2.graphOpen })); }
       else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); openAddTask(); }
       else if (meta && e.shiftKey && k === 't') { e.preventDefault(); openTaskManager(); }
+      else if (meta && e.shiftKey && k === 'd') { e.preventDefault(); openDaily(); }
       else if (meta && k === 'e' && s.activeId) {
         e.preventDefault();
         const id = (s.secondaryFocused && s.secondaryId) ? s.secondaryId : s.activeId;
@@ -1024,7 +1034,7 @@ export function useNotesApp(showRightSidebar = true) {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTab, open, openAddTask, openTaskManager, setState, setView]);
+  }, [closeTab, open, openAddTask, openDaily, openTaskManager, setState, setView]);
 
   // focus management
   useEffect(() => {
@@ -1689,17 +1699,16 @@ export function useNotesApp(showRightSidebar = true) {
     const ancestors: NoteFile[] = [];
     let p = active.parent;
     while (p) { const pf = fileOf(p); if (!pf) break; ancestors.unshift(pf); p = pf.parent; }
-    const segs: { label: string; title: string; id?: string; current: boolean }[] = [];
+    const segs: { label: string; title: string; id?: string; path?: string; current: boolean }[] = [];
     const folderParts = active.folder.split('/');
     folderParts.forEach((part, i) => {
       const prefixPath = folderParts.slice(0, i + 1).join('/');
-      const firstInFolder = all.find((f) => f.folder === prefixPath && !f.parent);
-      segs.push({ label: part, title: 'Folder · ' + prefixPath, id: firstInFolder?.id, current: false });
+      segs.push({ label: part, title: 'Folder · ' + prefixPath, path: prefixPath, current: false });
     });
     ancestors.forEach((a) => segs.push({ label: a.title, title: a.file, id: a.id, current: false }));
     segs.push({ label: active.file, title: active.file, current: true });
     return segs;
-  }, [active, all, fileOf]);
+  }, [active, fileOf]);
 
   // breadcrumb for the split (secondary) pane — mirrors pathSegments but for secondaryFile,
   // so the preview column can render its own breadcrumb row (matching the design handoff).
@@ -1708,17 +1717,16 @@ export function useNotesApp(showRightSidebar = true) {
     const ancestors: NoteFile[] = [];
     let p = secondaryFile.parent;
     while (p) { const pf = fileOf(p); if (!pf) break; ancestors.unshift(pf); p = pf.parent; }
-    const segs: { label: string; title: string; id?: string; current: boolean }[] = [];
+    const segs: { label: string; title: string; id?: string; path?: string; current: boolean }[] = [];
     const folderParts = secondaryFile.folder.split('/');
     folderParts.forEach((part, i) => {
       const prefixPath = folderParts.slice(0, i + 1).join('/');
-      const firstInFolder = all.find((f) => f.folder === prefixPath && !f.parent);
-      segs.push({ label: part, title: 'Folder · ' + prefixPath, id: firstInFolder?.id, current: false });
+      segs.push({ label: part, title: 'Folder · ' + prefixPath, path: prefixPath, current: false });
     });
     ancestors.forEach((a) => segs.push({ label: a.title, title: a.file, id: a.id, current: false }));
     segs.push({ label: secondaryFile.file, title: secondaryFile.file, current: true });
     return segs;
-  }, [secondaryFile, all, fileOf]);
+  }, [secondaryFile, fileOf]);
 
   const secondaryActiveTags = secondaryDoc.activeTags;
 
@@ -1768,7 +1776,7 @@ export function useNotesApp(showRightSidebar = true) {
     // actions
     open, closeTab, closeAllTabs, closeOtherTabs, touch, setSource, setEml, aiGenerate, toggleTask, openOrCreate,
     tasks, taskCounts,
-    openAddTask, closeAddTask, saveAddTask, addTaskLine, openTaskManager, ensureDaily, openDaily,
+    openAddTask, closeAddTask, saveAddTask, addTaskLine, openTaskManager, openFolder, ensureDaily, openDaily, dailyNoteId,
     currentExportHtml, exportPrint, exportDownload, exportDoc, exportCopyHtml,
     onPreviewClick, onSourceInput, scrollTo, selectPreviewTextInSource,
     openInBrowser,
