@@ -27,7 +27,11 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**/*.pdf"]
+        "scope": [
+          "**/*.[pP][dD][fF]",
+          "**/*.[jJ][pP][gG]", "**/*.[jJ][pP][eE][gG]", "**/*.[pP][nN][gG]",
+          "**/*.[gG][iI][fF]", "**/*.[wW][eE][bB][pP]", "**/*.[bB][mM][pP]", "**/*.[sS][vV][gG]"
+        ]
       }
     }
   },

@@ -1,4 +1,4 @@
-export type FileType = 'md' | 'html' | 'eml' | 'pdf';
+export type FileType = 'md' | 'html' | 'eml' | 'pdf' | 'image';
 
 export interface NoteFile {
   id: string;
