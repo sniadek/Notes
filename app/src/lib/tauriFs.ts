@@ -11,6 +11,14 @@ export async function pickVaultRoot(): Promise<string | null> {
   return typeof dir === 'string' ? dir : null;
 }
 
+// Registers the vault root with the Rust side, which scopes every file command to it —
+// must be called (idempotent) before any other FS command after app start or vault switch.
+export async function setVaultRoot(root: string): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import('@tauri-apps/api/core');
+  await invoke('set_vault_root', { path: root });
+}
+
 export async function readVaultTree(root: string): Promise<FsEntry[]> {
   if (!isTauri()) return [];
   const { invoke } = await import('@tauri-apps/api/core');

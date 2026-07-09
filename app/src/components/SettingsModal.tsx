@@ -47,6 +47,7 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
   const close = () => setState({ settingsOpen: false });
   const wt = toggle(state.wiki);
   const at = toggle(state.autosave);
+  const ct = toggle(state.dailyCarryOverTasks);
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'fade .12s ease' }}>
@@ -163,9 +164,59 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
             <div style={wt.track}><div style={wt.knob} /></div>
           </div>
           <div onClick={() => setState((s) => ({ autosave: !s.autosave }))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border-soft)', cursor: 'pointer' }}>
-            <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Autosave on edit</span>
+            <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Autosave on edit <span style={{ color: 'var(--text-faintest)', fontSize: 12 }}>· off: saves on window blur/close</span></span>
             <div style={at.track}><div style={at.knob} /></div>
           </div>
+          <div style={{ font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em', padding: '20px 0 10px' }}>DAILY NOTES</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
+            <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Folder</span>
+            <input
+              value={state.dailyFolder}
+              onChange={(e) => setState({ dailyFolder: e.target.value })}
+              placeholder="Daily"
+              style={{ font: '13px ui-monospace,Menlo,monospace', color: 'var(--text-primary)', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', width: 200, outline: 'none' }}
+            />
+          </div>
+          <div style={{ padding: '8px 0', borderTop: '1px solid var(--border-soft)' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>New-day template</span>
+              <span style={{ font: '11px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>{'{{date}} · {{weekday}} · {{time}}'}</span>
+            </div>
+            <textarea
+              value={state.dailyTemplate}
+              onChange={(e) => setState({ dailyTemplate: e.target.value })}
+              rows={5}
+              spellCheck={false}
+              style={{ width: '100%', font: '12.5px ui-monospace,Menlo,monospace', color: 'var(--text-primary)', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 11px', outline: 'none', resize: 'vertical' }}
+            />
+          </div>
+          <div style={{ padding: '8px 0', borderTop: '1px solid var(--border-soft)' }}>
+            <div style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)', marginBottom: 8 }}>Daily prompts <span style={{ color: 'var(--text-faintest)', fontSize: 12 }}>· one per line, seeded as a checklist on new days</span></div>
+            <textarea
+              value={state.dailyPrompts.join('\n')}
+              onChange={(e) => setState({ dailyPrompts: e.target.value.split('\n') })}
+              rows={3}
+              spellCheck={false}
+              placeholder={'What\'s the one thing today?\nAny blockers?'}
+              style={{ width: '100%', font: '12.5px -apple-system,system-ui', color: 'var(--text-primary)', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 11px', outline: 'none', resize: 'vertical' }}
+            />
+          </div>
+          <div onClick={() => setState((s) => ({ dailyCarryOverTasks: !s.dailyCarryOverTasks }))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border-soft)', cursor: 'pointer' }}>
+            <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Carry over unchecked tasks to next day</span>
+            <div style={ct.track}><div style={ct.knob} /></div>
+          </div>
+          {vm.isTauri && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border-soft)' }}>
+              <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Global quick-capture shortcut</span>
+              <input
+                value={state.dailyGlobalShortcut}
+                onChange={(e) => setState({ dailyGlobalShortcut: e.target.value })}
+                placeholder="CommandOrControl+Shift+J"
+                title="Tauri accelerator format, e.g. CommandOrControl+Shift+J"
+                style={{ font: '13px ui-monospace,Menlo,monospace', color: 'var(--text-primary)', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', width: 220, outline: 'none' }}
+              />
+            </div>
+          )}
           <div style={{ font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em', padding: '20px 0 10px' }}>FILES</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
             <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>New note format</span>

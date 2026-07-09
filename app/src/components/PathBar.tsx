@@ -1,10 +1,16 @@
 import type { NotesAppVM } from '../hooks/useNotesApp';
+import { todayISO } from '../lib/tasks';
+import { shiftISO } from '../lib/utils';
 
 export default function PathBar({ vm, pane = 'primary' }: { vm: NotesAppVM; pane?: 'primary' | 'secondary' }) {
   const { state, setState } = vm;
   const secondary = pane === 'secondary';
 
   const file = secondary ? vm.secondary.file : vm.active;
+  // A daily note = a file in the configured daily folder whose title is a bare ISO date.
+  // When one is open, the breadcrumb grows ◀ / today / ▶ controls to walk between days.
+  const isDaily = !!file && file.folder === (state.dailyFolder || 'Daily') && /^\d{4}-\d{2}-\d{2}$/.test(file.title);
+  const dailyDate = isDaily ? file!.title : '';
   const segments = secondary ? vm.secondaryPathSegments : vm.pathSegments;
   const tags = secondary ? vm.secondaryActiveTags : vm.activeTags;
   const canHistory = secondary ? vm.secondaryCanHistory : vm.canHistory;
@@ -43,6 +49,43 @@ export default function PathBar({ vm, pane = 'primary' }: { vm: NotesAppVM; pane
           </span>
         ))}
       </div>
+      {isDaily && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flex: 'none' }}>
+          {[
+            { label: '‹', title: 'Previous day', to: shiftISO(dailyDate, -1) },
+            { label: '›', title: 'Next day', to: shiftISO(dailyDate, 1) },
+          ].map((b) => (
+            <span
+              key={b.title}
+              onClick={() => vm.openDailyFor(b.to)}
+              title={b.title}
+              style={{ font: '600 13px -apple-system,system-ui', color: 'var(--text-faint)', cursor: 'pointer', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 5 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-faint)'; }}
+            >
+              {b.label}
+            </span>
+          ))}
+          {dailyDate !== todayISO() && (
+            <span
+              onClick={() => vm.openDailyFor(todayISO())}
+              title="Jump to today"
+              style={{ font: '500 10.5px -apple-system,system-ui', color: 'oklch(0.5 0.1 var(--accent-hue))', cursor: 'pointer', padding: '2px 7px', borderRadius: 6 }}
+            >
+              Today
+            </span>
+          )}
+          <span
+            onClick={() => vm.generateWeeklyReview(dailyDate)}
+            title="Generate this week's rollup note"
+            style={{ font: '500 10.5px -apple-system,system-ui', color: 'var(--text-faint)', cursor: 'pointer', padding: '2px 7px', borderRadius: 6, marginLeft: 4 }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-faint)'; }}
+          >
+            ↻ Weekly
+          </span>
+        </div>
+      )}
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
         {tags.map((tg) => (
           <span

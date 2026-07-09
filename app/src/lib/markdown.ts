@@ -18,8 +18,12 @@ export function slug(t: string): string {
   return t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
+// Quotes must be escaped too: rendered text gets interpolated into attribute values
+// (data-wiki, data-tex, data-mmd-src below), so an unescaped `"` in note content would
+// break out of the attribute and inject live markup into the preview.
 export function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function unquote(v: string): string {
@@ -59,9 +63,23 @@ export function parseFront(md: string): FrontMatter {
   return { body: after, offset, tags, extra, ...fields };
 }
 
+// Per-note memo over parseFront: frontmatter is re-consulted vault-wide (tags, smart
+// filters, concept types) on every source change, but only the edited note's text actually
+// differs — cache by note id and re-parse only when that note's source changed. Bounded by
+// the number of notes.
+const frontCache = new Map<string, { src: string; fm: FrontMatter }>();
+
+export function parseFrontCached(id: string, md: string): FrontMatter {
+  const hit = frontCache.get(id);
+  if (hit && hit.src === md) return hit.fm;
+  const fm = parseFront(md);
+  frontCache.set(id, { src: md, fm });
+  return fm;
+}
+
 export function inline(s: string, wiki: boolean): string {
   s = esc(s);
-  s = s.replace(/\$([^$\n]+)\$/g, (_m, tex) => '<span data-tex="' + tex.replace(/"/g, '&quot;') + '">' + tex + '</span>');
+  s = s.replace(/\$([^$\n]+)\$/g, (_m, tex) => '<span data-tex="' + tex + '">' + tex + '</span>');
   s = s.replace(/`([^`]+)`/g, '<code style="font:13px ui-monospace,Menlo,monospace;background:var(--bg-subtle);padding:1px 6px;border-radius:4px;color:var(--text-secondary)">$1</code>');
   if (wiki) s = s.replace(/\[\[([^\]]+)\]\]/g, '<span data-wiki="$1" style="color:var(--accent);border-bottom:1.5px solid var(--accent-soft);font-weight:500;cursor:pointer">$1</span>');
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700;color:var(--text-primary)">$1</strong>');
@@ -70,7 +88,10 @@ export function inline(s: string, wiki: boolean): string {
 
 export function highlight(code: string): string {
   const re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\b(const|let|var|function|return|if|else|for|while|import|from|export|class|new|await|async|GET|POST|PUT|DELETE|PATCH|true|false|null)\b|\b(\d+(?:\.\d+)?)\b/g;
-  return esc(code).replace(re, (m, com, str, kw, num) =>
+  // Content-only escape (quotes stay literal): the output lands inside <pre>, never in an
+  // attribute, and the string-literal token regex above needs real quotes to match.
+  const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escaped.replace(re, (m, com, str, kw, num) =>
     com ? '<span style="color:var(--text-tertiary)">' + com + '</span>'
       : str ? '<span style="color:#1a8a4f">' + str + '</span>'
       : kw ? '<span style="color:oklch(0.5 0.16 295);font-weight:600">' + kw + '</span>'
@@ -105,11 +126,13 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
         if (lang === 'mermaid') {
           const mid = idPrefix + 'mmd' + (mmdN++);
           mermaidBlocks[mid] = code.join('\n');
-          html += '<div class="mmd" data-mmd="' + mid + '" style="border:1px solid var(--border);border-radius:9px;padding:18px;margin:0 0 18px;background:var(--bg-subtle);overflow:auto;text-align:center;color:var(--text-tertiary);font:12px ui-monospace,Menlo,monospace">◇ rendering diagram…</div>';
+          // data-mmd-src carries the diagram source through the DOM: the rendered SVG replaces
+          // the div's content, so htmlToMd can only recover the fence from this attribute.
+          html += '<div class="mmd" data-mmd="' + mid + '" data-mmd-src="' + esc(code.join('\n')) + '" style="border:1px solid var(--border);border-radius:9px;padding:18px;margin:0 0 18px;background:var(--bg-subtle);overflow:auto;text-align:center;color:var(--text-tertiary);font:12px ui-monospace,Menlo,monospace">◇ rendering diagram…</div>';
         } else {
           const id = idPrefix + 'cb' + (cbN++);
           codeBlocks[id] = code.join('\n');
-          html += '<div style="border:1px solid var(--border);border-radius:9px;overflow:hidden;margin:0 0 18px;background:var(--bg-subtle)"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font:11px ui-monospace,Menlo,monospace;color:var(--text-tertiary)"><span>' + (lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:var(--accent)">Copy</span></div><pre style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:var(--text-primary);overflow:auto">' + highlight(code.join('\n')) + '</pre></div>';
+          html += '<div data-lang="' + esc(lang) + '" style="border:1px solid var(--border);border-radius:9px;overflow:hidden;margin:0 0 18px;background:var(--bg-subtle)"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font:11px ui-monospace,Menlo,monospace;color:var(--text-tertiary)"><span>' + esc(lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:var(--accent)">Copy</span></div><pre style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:var(--text-primary);overflow:auto">' + highlight(code.join('\n')) + '</pre></div>';
         }
         code = []; inCode = false; lang = '';
       } else { close(); inCode = true; lang = line.trim().slice(3); }
@@ -232,6 +255,9 @@ function inlineToMd(el: Node): string {
     else if (tag === 'a') out += '[' + inlineToMd(e) + '](' + (e.getAttribute('href') || '') + ')';
     else if (tag === 'br') out += '\n';
     else if (e.hasAttribute && e.hasAttribute('data-wiki')) out += '[[' + e.getAttribute('data-wiki') + ']]';
+    // KaTeX replaces the span's content with rendered markup; the original TeX only
+    // survives in the attribute, so recursing into the children would emit garbage.
+    else if (e.hasAttribute && e.hasAttribute('data-tex')) out += '$' + e.getAttribute('data-tex') + '$';
     else out += inlineToMd(e);
   });
   return out;
@@ -258,6 +284,11 @@ export function htmlToMd(html: string): string {
     } else if (tag === 'pre') {
       const code = e.querySelector('code');
       lines.push('```\n' + (code ? code.textContent : e.textContent) + '\n```');
+    } else if (tag === 'div' && e.classList.contains('mmd')) {
+      // The rendered SVG carries no source text — recover the fence from data-mmd-src,
+      // which mdToHtml stamps on the block for exactly this round-trip.
+      const src = e.getAttribute('data-mmd-src');
+      if (src) lines.push('```mermaid\n' + src + '\n```');
     } else if (tag === 'div' && e.hasAttribute('data-task')) {
       const done = e.querySelector('span')?.textContent?.trim() === '✓';
       const text = e.querySelectorAll('span')[1] ? inlineToMd(e.querySelectorAll('span')[1]).trim() : inlineToMd(e).trim();
@@ -265,9 +296,8 @@ export function htmlToMd(html: string): string {
     } else if (tag === 'div' && e.querySelector(':scope > pre')) {
       const pre = e.querySelector(':scope > pre') as HTMLElement;
       const code = pre.querySelector('code');
-      lines.push('```\n' + (code ? code.textContent : pre.textContent) + '\n```');
-    } else if (tag === 'div' && e.classList.contains('mmd')) {
-      // mermaid blocks render as a placeholder div with no source text in the DOM; skip
+      const lang = e.getAttribute('data-lang') || '';
+      lines.push('```' + lang + '\n' + (code ? code.textContent : pre.textContent) + '\n```');
     } else if (tag === 'table') {
       const headerCells = Array.from(e.querySelectorAll('thead th')).map((th) => inlineToMd(th).trim());
       const rows = Array.from(e.querySelectorAll('tbody tr')).map((tr) =>

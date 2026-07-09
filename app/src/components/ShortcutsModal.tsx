@@ -8,7 +8,7 @@ const SHORTCUTS = [
   { label: 'Graph view', keys: '⌘G' },
   { label: 'Add task', keys: '⌘⇧N' },
   { label: 'Open Tasks', keys: '⌘⇧T' },
-  { label: 'Open Daily Note', keys: '⌘⇧D' },
+  { label: 'Add to Daily Note', keys: '⌘⇧D' },
   { label: 'Switch to tab 1–9', keys: '⌘1–9' },
   { label: 'Close tab', keys: '⌘W' },
   { label: 'Toggle sidebar', keys: '⌘\\' },

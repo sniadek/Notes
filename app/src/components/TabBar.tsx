@@ -116,8 +116,9 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
                 e.preventDefault();
                 const rect = e.currentTarget.getBoundingClientRect();
                 const zone: DropZone = e.clientX - rect.left < rect.width / 2 ? 'before' : 'after';
-                setDragOverId(id);
-                setDragZone(zone);
+                // dragover fires continuously — only touch state when the target changed.
+                if (dragOverId !== id) setDragOverId(id);
+                if (dragZone !== zone) setDragZone(zone);
               }}
               onDragLeave={() => { setDragOverId(null); setDragZone(null); }}
               onDrop={(e: DragEvent) => {

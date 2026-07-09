@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from 
 import { VAULT_POLL_MS, type FolderNode, type NotesAppVM } from '../hooks/useNotesApp';
 import { TASK_MANAGER_ID } from '../lib/tasks';
 import type { NoteFile } from '../types';
+import DailyCalendar from './DailyCalendar';
 
 function SyncCountdown({ lastSyncedAt }: { lastSyncedAt: number }) {
   const [now, setNow] = useState(() => Date.now());
@@ -134,7 +135,7 @@ export function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, 
   const kids = vm.childrenOf(file.id);
   const expanded = state.expandedDocs[file.id];
   const isOver = dragOverId === file.id;
-  const isDynamic = state.dynamicFiles.some((d) => d.id === file.id);
+  const isDynamic = vm.dynamicIds.has(file.id);
   const menuRef = useCloseOnOutsideClick(menuOpen, () => setMenuOpen(false));
 
   const commitRename = () => {
@@ -153,8 +154,10 @@ export function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, 
           const rect = e.currentTarget.getBoundingClientRect();
           const y = e.clientY - rect.top;
           const zone: NoteZone = y < rect.height / 3 ? 'before' : y > (rect.height * 2) / 3 ? 'after' : 'inside';
-          setDragOverId(file.id);
-          setDragZone(zone);
+          // dragover fires continuously — only touch state (and re-render the whole
+          // sidebar) when the hovered row or zone actually changed.
+          if (dragOverId !== file.id) setDragOverId(file.id);
+          if (dragZone !== zone) setDragZone(zone);
         }}
         onDragLeave={() => { setDragOverId(null); setDragZone(null); }}
         onDrop={(e: DragEvent) => {
@@ -290,11 +293,12 @@ export function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDr
             const rect = e.currentTarget.getBoundingClientRect();
             const y = e.clientY - rect.top;
             const zone: NoteZone = y < rect.height / 3 ? 'before' : y > (rect.height * 2) / 3 ? 'after' : 'inside';
-            setFolderDragOver({ path: node.path, zone });
-            setDragOverId(null);
+            // Same continuous-dragover guard as FileRow: only set state on actual change.
+            if (folderDragOver?.path !== node.path || folderDragOver.zone !== zone) setFolderDragOver({ path: node.path, zone });
+            if (dragOverId !== null) setDragOverId(null);
           } else {
-            setDragOverId(folderKey);
-            setFolderDragOver(null);
+            if (dragOverId !== folderKey) setDragOverId(folderKey);
+            if (folderDragOver !== null) setFolderDragOver(null);
           }
         }}
         onDragLeave={() => { setDragOverId(null); setFolderDragOver(null); }}
@@ -404,6 +408,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
   const [dragZone, setDragZone] = useState<NoteZone | null>(null);
   const [folderDragOver, setFolderDragOver] = useState<FolderDragOver>(null);
   const [filterMenuOpenId, setFilterMenuOpenId] = useState<string | null>(null);
+  const calendarRef = useCloseOnOutsideClick(state.calendarOpen, () => vm.setState({ calendarOpen: false }));
 
   const pinnedExpanded = state.expandedDocs['section:pinned'] !== false;
   const recentExpanded = state.expandedDocs['section:recent'] === true;
@@ -424,7 +429,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
           )}
         </div>
         <div
-          onClick={vm.openDaily}
+          onClick={vm.openDailyCapture}
           title="Daily Note"
           style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: state.activeId === vm.dailyNoteId ? ACCENT_SOFT : 'transparent' }}
         >
@@ -487,16 +492,26 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             </span>
           )}
         </div>
-        <div
-          onClick={vm.openDaily}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10,
-            padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
-            ...(state.activeId === vm.dailyNoteId ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
-          }}
-        >
-          <span style={{ width: 8, flex: 'none', display: 'flex', justifyContent: 'center' }}><CalendarIcon size={12} /></span>
-          <span style={{ flex: 1 }}>Daily Note</span>
+        <div ref={calendarRef} style={{ position: 'relative', marginBottom: 10 }}>
+          <div
+            onClick={vm.openDailyCapture}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
+              ...(state.activeId === vm.dailyNoteId ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
+            }}
+          >
+            <span style={{ width: 8, flex: 'none', display: 'flex', justifyContent: 'center' }}><CalendarIcon size={12} /></span>
+            <span style={{ flex: 1 }}>Daily Note</span>
+            <span
+              onClick={(e) => { e.stopPropagation(); vm.setState((s) => ({ calendarOpen: !s.calendarOpen })); }}
+              title="Browse daily notes"
+              style={{ color: 'var(--text-faintest)', fontSize: 11, padding: '0 2px', flex: 'none' }}
+            >
+              ▾
+            </span>
+          </div>
+          {state.calendarOpen && <DailyCalendar vm={vm} onClose={() => vm.setState({ calendarOpen: false })} />}
         </div>
         <div style={{ ...sectionLabelStyle(cowork), padding: cowork ? '4px 11px 8px' : '4px 11px 7px', cursor: 'default' }}>
           <span>{cowork ? 'Smart filters' : 'SMART FILTERS'}</span>
@@ -691,11 +706,25 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
           </div>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: '#1a8a4f' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#28b463' }} />
-        Synced
-        {showSyncCountdown && <SyncCountdown lastSyncedAt={state.lastSyncedAt!} />}
-      </div>
+      {state.saveError || state.persistError
+        ? (
+          <div
+            title={state.persistError
+              ? 'Saving app state to localStorage failed (storage quota?) — recent changes may not survive a restart.'
+              : 'Writing a note to disk failed — its latest text is only in memory.'}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: '#b5453f' }}
+          >
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c0524a' }} />
+            Save failed
+          </div>
+        )
+        : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: '#1a8a4f' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#28b463' }} />
+            Synced
+            {showSyncCountdown && <SyncCountdown lastSyncedAt={state.lastSyncedAt!} />}
+          </div>
+        )}
     </div>
   );
 }
