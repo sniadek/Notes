@@ -1,0 +1,8 @@
+{
+  "name": "notes-monorepo",
+  "private": true,
+  "scripts": {
+    "test": "npm --prefix app test",
+    "allure:generate": "npm --prefix app run allure:generate"
+  }
+}
