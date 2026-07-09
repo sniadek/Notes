@@ -3,22 +3,26 @@ import type { ChangeEvent, MouseEvent, SyntheticEvent } from 'react';
 import katex from 'katex';
 import mermaid from 'mermaid';
 import {
-  badgeColors, backlinkMap, files as filesSeed, slashDefs, typeLabels,
+  badgeColors, files as filesSeed, slashDefs, typeLabels,
 } from '../seedData';
 import { loadPersistedState, savePersistedState, type PersistedState } from '../lib/persist';
 import {
-  diffLines, htmlToMd, mdToHtml, outlineHtml, outlineMd, parseEml, parseFront, slug, wordCount,
+  diffLines, esc, htmlToMd, mdToHtml, outlineHtml, outlineMd, parseEml, parseFront, parseFrontCached, slug, wordCount,
 } from '../lib/markdown';
 import type { FrontMatter } from '../lib/markdown';
-import { agoLabel, dailyTitle, download, escapeRegExp, nowStamp, openInBrowser } from '../lib/utils';
+import {
+  agoLabel, appendUnderSection, dailyTitle, download, escapeRegExp, isoWeekLabel, isoWeekMonday, linesInSection,
+  linkifyMentions, nowStamp, openInBrowser, renderDailyTemplate, routeDailyCapture, shiftISO,
+} from '../lib/utils';
 import {
   copyFile as tauriCopyFile, createFile as tauriCreateFile, deleteFile as tauriDeleteFile, isTauri,
   moveFile as tauriMoveFile, pickVaultRoot as tauriPickVaultRoot, readFile, readVaultTree,
-  revealInFinder, writeFile,
+  revealInFinder, setVaultRoot as tauriSetVaultRoot, writeFile,
 } from '../lib/tauriFs';
 import {
-  TASK_MANAGER_ID, buildTaskLine, isOverdue, isToday, scanTasks,
+  TASK_MANAGER_ID, buildTaskLine, isOverdue, isToday, parseTaskLine, scanTasks, todayISO,
 } from '../lib/tasks';
+import { isSupportedFile, mergeNoteContent, typeFromFilename } from '../lib/vaultFile';
 import type { CustomFilter, EmlData, FileType, FilterRule, HtmlWidth, NoteFile, TaskPriority, ViewMode } from '../types';
 
 interface Suggest { kind: 'wiki' | 'slash'; q: string; caret: number; pane: 'primary' | 'secondary'; }
@@ -50,6 +54,13 @@ interface EphemeralState {
   addTaskDue: string;
   addTaskPriority: TaskPriority | '';
   addTaskTargetId: string | null;
+  dailyCaptureOpen: boolean;
+  dailyCaptureText: string;
+  // Which day the capture lands in (ISO). Defaults to today when the modal opens; the
+  // modal's date picker lets you backdate an entry into an earlier (or later) day's note.
+  dailyCaptureDate: string;
+  // Transient confirmation banner shown after a capture, with an Undo affordance.
+  toast: { message: string } | null;
   shortcutsOpen: boolean;
   exportOpen: boolean;
   // Separate flag for the split pane's breadcrumb export menu, so opening one column's
@@ -59,11 +70,20 @@ interface EphemeralState {
   smartFilterModalOpen: boolean;
   editingFilterId: string | null;
   lastSyncedAt: number | null;
+  // id of the last note whose disk write failed (cleared on the next successful write),
+  // and whether the last localStorage persist failed (e.g. quota) — both surfaced in the
+  // sidebar footer so a failing save is never silent.
+  saveError: string | null;
+  persistError: boolean;
   // Which half of a split pair last had interaction focus — drives the tab bar's bold/current
   // styling independent of activeId/secondaryId, which stay pinned to their left/right panes.
   // false = primary (left) tab looks current; true = secondary (right) tab does. Only consulted
   // while a pair actually exists (state.secondaryId is set) — otherwise ignored.
   secondaryFocused: boolean;
+  // Mini calendar/heatmap popover for the Daily Note button (feature 2) — calendarMonth is
+  // the displayed month as "YYYY-MM", not persisted (always reopens on the current month).
+  calendarOpen: boolean;
+  calendarMonth: string;
 }
 
 function ephemeralDefaults(): EphemeralState {
@@ -74,6 +94,7 @@ function ephemeralDefaults(): EphemeralState {
     historyOpen: false, historyPick: 0, historyTargetId: null,
     graphOpen: false,
     addTaskOpen: false, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
+    dailyCaptureOpen: false, dailyCaptureText: '', dailyCaptureDate: '', toast: null,
     shortcutsOpen: false,
     exportOpen: false,
     exportOpenSecondary: false,
@@ -81,7 +102,11 @@ function ephemeralDefaults(): EphemeralState {
     smartFilterModalOpen: false,
     editingFilterId: null,
     lastSyncedAt: null,
+    saveError: null,
+    persistError: false,
     secondaryFocused: false,
+    calendarOpen: false,
+    calendarMonth: todayISO().slice(0, 7),
   };
 }
 
@@ -91,36 +116,17 @@ const ACCENT = 'var(--accent)';
 const ACCENT_SOFT = 'var(--accent-soft)';
 export const VAULT_POLL_MS = 20000;
 
+// Exported/printed HTML is full of inline styles referencing the app's CSS variables — a
+// fresh window (or Word) has none of them, so exports define the light-theme palette
+// explicitly (mirrors html[data-design="default"] in index.css).
+const EXPORT_STYLE = '<style>:root{--text-primary:#26241f;--text-secondary:#403d37;--text-muted:#8a8a8f;--text-tertiary:#a8a29a;--text-faint:#b5b0a6;--text-faintest:#bdb8af;--border:rgba(0,0,0,.07);--border-soft:rgba(0,0,0,.05);--bg-subtle:#f0eee9;--bg-surface:#fffefb;--accent-hue:264;--accent:oklch(0.5 0.12 264);--accent-soft:oklch(0.95 0.025 264)}</style>';
+
 let mermaidInit = false;
 
 function withoutId(order: string[], id: string): string[] {
   return order.filter((x) => x !== id);
 }
 
-// Extension matching is case-insensitive (a vault can contain "Report.PDF" as easily as
-// "report.pdf") — used both for freshly-discovered files and to self-heal any file whose
-// stored type disagrees with what its actual filename says (see refreshVault).
-const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']);
-
-function typeFromFilename(name: string): FileType {
-  const ext = (name.split('.').pop() || '').toLowerCase();
-  if (ext === 'html') return 'html';
-  if (ext === 'eml') return 'eml';
-  if (ext === 'pdf') return 'pdf';
-  if (IMAGE_EXTS.has(ext)) return 'image';
-  return 'md';
-}
-
-// Used when reconciling two dynamicFiles entries that turned out to represent the same
-// on-disk file (see refreshVault): folds any lines unique to the entry being dropped into
-// the surviving one, instead of silently discarding whichever entry loses the merge.
-function mergeNoteContent(winner: string, loser: string): string {
-  const seen = new Set(winner.split('\n').map((l) => l.trim()).filter(Boolean));
-  const extra = loser.split('\n').filter((l) => l.trim() && !seen.has(l.trim()));
-  if (!extra.length) return winner;
-  const sep = winner && !winner.endsWith('\n') ? '\n' : '';
-  return winner + sep + extra.join('\n') + '\n';
-}
 
 function insertRelative(order: string[], id: string, targetId: string, position: 'before' | 'after'): string[] {
   const base = withoutId(order, id);
@@ -175,11 +181,13 @@ interface DerivedDoc {
   mermaidBlocks: Record<string, string>;
 }
 
-// Pure computation shared by the primary and secondary (split) panes — given a
-// file plus the raw source/eml maps, builds everything a pane needs to render.
-// idPrefix keeps generated code-block/mermaid-block ids from colliding when both
-// panes render markdown at once.
-function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, eml: Record<string, EmlData>, wiki: boolean, idPrefix: string): DerivedDoc {
+// Pure computation shared by the primary and secondary (split) panes — given a file plus
+// its raw source (and parsed eml, for .eml files), builds everything a pane needs to
+// render. Takes the individual note's data rather than the whole sources/eml maps so the
+// callers' useMemo can key on exactly what this reads — the maps change identity on every
+// keystroke in ANY note. idPrefix keeps generated code-block/mermaid-block ids from
+// colliding when both panes render markdown at once.
+function deriveDoc(file: NoteFile | undefined, source: string, emlEntry: EmlData | undefined, wiki: boolean, idPrefix: string): DerivedDoc {
   const isMd = file?.type === 'md';
   const isHtml = file?.type === 'html';
   const isEml = file?.type === 'eml';
@@ -197,7 +205,7 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
 
   if (file) {
     if (isMd) {
-      sourceValue = sources[file.id] || '';
+      sourceValue = source;
       const fr = parseFront(sourceValue);
       frontMatter = fr;
       words = wordCount(fr.body);
@@ -208,11 +216,11 @@ function deriveDoc(file: NoteFile | undefined, sources: Record<string, string>, 
       codeBlocks = rendered.codeBlocks;
       mermaidBlocks = rendered.mermaidBlocks;
     } else if (isHtml) {
-      sourceValue = sources[file.id] || '';
+      sourceValue = source;
       words = wordCount(sourceValue);
       outline = outlineHtml(sourceValue);
     } else if (isEml) {
-      emlData = eml[file.id] || { from: '', to: '', subject: '', body: '' };
+      emlData = emlEntry || { from: '', to: '', subject: '', body: '' };
       words = wordCount(emlData.body);
       outline = outlineHtml(emlData.body);
     }
@@ -254,20 +262,35 @@ export function useNotesApp(showRightSidebar = true) {
   useEffect(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
+      // Disk-backed note contents are NOT persisted to localStorage — the vault file on
+      // disk is their source of truth (refreshVault re-reads any missing ones on launch).
+      // Persisting them too would blow the ~5MB quota on any real vault and silently stop
+      // ALL persistence. Path-less notes (created before a vault existed) keep their text
+      // here since localStorage is the only place it lives.
+      const diskBacked = new Set<string>();
+      const moves = state.fileMoves;
+      state.dynamicFiles.forEach((f) => {
+        if (f.path || moves[f.id]?.path) diskBacked.add(f.id);
+      });
       const p: PersistedState = {
         collapsed: state.collapsed, railHidden: state.railHidden, defaultView: state.defaultView, viewByNote: state.viewByNote, activeId: state.activeId,
         secondaryId: state.secondaryId,
         openTabs: state.openTabs, filter: state.filter, expandedDocs: state.expandedDocs, editedAt: state.editedAt,
-        dynamicFiles: state.dynamicFiles, sources: state.sources, eml: state.eml, history: state.history,
+        dynamicFiles: state.dynamicFiles,
+        sources: Object.fromEntries(Object.entries(state.sources).filter(([id]) => !diskBacked.has(id))),
+        eml: state.eml, history: state.history,
         wiki: state.wiki, autosave: state.autosave, htmlWidth: state.htmlWidth,
         docWidth: state.docWidth, docFontSize: state.docFontSize, vaultRoot: state.vaultRoot,
         design: state.design, folderOrder: state.folderOrder, noteOrder: state.noteOrder, fileMoves: state.fileMoves,
         createdAt: state.createdAt, customFilters: state.customFilters, pinnedFolders: state.pinnedFolders,
+        dailyFolder: state.dailyFolder, dailyTemplate: state.dailyTemplate,
+        dailyPrompts: state.dailyPrompts, dailyCarryOverTasks: state.dailyCarryOverTasks, dailyGlobalShortcut: state.dailyGlobalShortcut,
       };
-      savePersistedState(p);
+      const ok = savePersistedState(p);
+      if (!ok !== stateRef.current.persistError) setState({ persistError: !ok });
     }, 250);
     return () => { if (saveTimer.current) window.clearTimeout(saveTimer.current); };
-  }, [state]);
+  }, [state, setState]);
 
   useEffect(() => {
     document.documentElement.dataset.design = state.design;
@@ -289,17 +312,22 @@ export function useNotesApp(showRightSidebar = true) {
     return map;
   }, [all]);
   const fileOf = useCallback((id: string | null | undefined) => (id ? fileOfMap.get(id) : undefined), [fileOfMap]);
+  // Ref mirror for timer/event callbacks (the debounced disk writes): they must resolve a
+  // note's path at fire time, not the path from the render that scheduled them — otherwise
+  // a rename with a write pending would re-create the file under its old name.
+  const fileOfMapRef = useRef(fileOfMap);
+  fileOfMapRef.current = fileOfMap;
 
   const fileTags = useCallback((id: string): string[] => {
     const f = fileOf(id);
     if (!f || f.type !== 'md') return [];
-    return parseFront(state.sources[id] || '').tags;
+    return parseFrontCached(id, state.sources[id] || '').tags;
   }, [fileOf, state.sources]);
 
   const fileFrontMatter = useCallback((id: string): FrontMatter => {
     const f = fileOf(id);
     if (!f || f.type !== 'md') return { body: '', offset: 0, tags: [], extra: {} };
-    return parseFront(state.sources[id] || '');
+    return parseFrontCached(id, state.sources[id] || '');
   }, [fileOf, state.sources]);
 
   // refs
@@ -307,6 +335,9 @@ export function useNotesApp(showRightSidebar = true) {
   const previewElRef = useRef<HTMLDivElement | null>(null);
   const paletteInputRef = useRef<HTMLInputElement | null>(null);
   const addTaskInputRef = useRef<HTMLInputElement | null>(null);
+  const dailyCaptureInputRef = useRef<HTMLTextAreaElement | null>(null);
+  // Holds the pre-append source of the last capture so the toast's Undo can restore it.
+  const captureUndoRef = useRef<{ id: string; prevSource: string } | null>(null);
   const mermaidBlocksRef = useRef<Record<string, string>>({});
   // secondary (split) pane refs — mirror the primary pane's refs above. Both panes can be
   // independently editable, so the secondary gets its own source textarea ref too.
@@ -318,12 +349,74 @@ export function useNotesApp(showRightSidebar = true) {
     setState((s) => ({ editedAt: { ...s.editedAt, [id]: Date.now() } }));
   }, [setState]);
 
+  // ---- disk write queue ----
+  // All source edits funnel through markDirty: writes are debounced per note (so typing
+  // doesn't hit the disk per keystroke), chained per note (so an earlier slow write can
+  // never land after — and clobber — a later one), gated on the autosave setting (edits
+  // still flush on window blur/close when it's off), and failures surface via saveError
+  // instead of vanishing.
+  const writeTimers = useRef<Map<string, number>>(new Map());
+  const writeChains = useRef<Map<string, Promise<void>>>(new Map());
+  const dirtyIds = useRef<Set<string>>(new Set());
+  // Timestamp (captured when `contents` was read, not when the write later confirms) of the
+  // last edit actually confirmed written to disk for each note. refreshVault compares this
+  // against editedAt to tell "fully saved" apart from "edited but not yet confirmed on disk"
+  // — dirtyIds alone isn't enough for that, since it's cleared the instant a write *starts*,
+  // not when it's *confirmed*, leaving a window where a background disk read can still race
+  // in with pre-edit content (see the "captures reappear after editing" bug).
+  const lastWrittenAt = useRef<Map<string, number>>(new Map());
+
+  const flushNoteToDisk = useCallback((id: string) => {
+    const t = writeTimers.current.get(id);
+    if (t) { window.clearTimeout(t); writeTimers.current.delete(id); }
+    dirtyIds.current.delete(id);
+    if (!isTauri()) return;
+    const path = fileOfMapRef.current.get(id)?.path;
+    const contents = stateRef.current.sources[id];
+    if (!path || contents === undefined) return;
+    // Captured now, before the write even starts — if a newer edit lands while this write is
+    // still in flight, its editedAt will be later than this capturedAt, correctly keeping the
+    // note flagged unsafe until *that* edit is itself confirmed written.
+    const capturedAt = Date.now();
+    const prev = writeChains.current.get(id) ?? Promise.resolve();
+    const next = prev.then(
+      () => writeFile(path, contents).then(
+        () => {
+          lastWrittenAt.current.set(id, capturedAt);
+          if (stateRef.current.saveError === id) setState({ saveError: null });
+        },
+        () => setState({ saveError: id }),
+      ),
+    );
+    writeChains.current.set(id, next);
+  }, [setState]);
+
+  const markDirty = useCallback((id: string) => {
+    dirtyIds.current.add(id);
+    if (!isTauri() || !stateRef.current.autosave) return;
+    const t = writeTimers.current.get(id);
+    if (t) window.clearTimeout(t);
+    writeTimers.current.set(id, window.setTimeout(() => flushNoteToDisk(id), 600));
+  }, [flushNoteToDisk]);
+
+  const flushAllWrites = useCallback(() => {
+    Array.from(dirtyIds.current).forEach((id) => flushNoteToDisk(id));
+  }, [flushNoteToDisk]);
+
+  useEffect(() => {
+    window.addEventListener('blur', flushAllWrites);
+    window.addEventListener('beforeunload', flushAllWrites);
+    return () => {
+      window.removeEventListener('blur', flushAllWrites);
+      window.removeEventListener('beforeunload', flushAllWrites);
+    };
+  }, [flushAllWrites]);
+
   const setSource = useCallback((id: string, v: string) => {
     setState((s) => ({ sources: { ...s.sources, [id]: v } }));
     touch(id);
-    const f = fileOfMap.get(id);
-    if (isTauri() && f?.path) writeFile(f.path, v).catch(() => {});
-  }, [fileOfMap, setState, touch]);
+    markDirty(id);
+  }, [markDirty, setState, touch]);
 
   const setEml = useCallback((id: string, key: keyof EmlData, val: string) => {
     setState((s) => ({ eml: { ...s.eml, [id]: { ...s.eml[id], [key]: val } } }));
@@ -524,9 +617,18 @@ export function useNotesApp(showRightSidebar = true) {
     setState((s) => ({ expandedDocs: { ...s.expandedDocs, [key]: !s.expandedDocs[key] } }));
   }, [setState]);
 
+  // Paths whose disk read failed (permissions, non-UTF8 content in a supported extension…).
+  // Without this the poll would retry them every VAULT_POLL_MS forever; cleared when a new
+  // vault is picked.
+  const failedReads = useRef<Set<string>>(new Set());
+
   const refreshVault = useCallback(async () => {
     const root = stateRef.current.vaultRoot;
     if (!isTauri() || !root) return;
+    // The Rust side scopes every file command to a registered root; a fresh process (or a
+    // vault switch) hasn't registered one yet, so (re-)register before scanning. Idempotent.
+    await tauriSetVaultRoot(root).catch(() => {});
+    const refreshStart = Date.now();
     const entries = await readVaultTree(root).catch(() => []);
 
     const moves = stateRef.current.fileMoves;
@@ -546,6 +648,16 @@ export function useNotesApp(showRightSidebar = true) {
     });
     const dropIds = new Set<string>();
     const remap = new Map<string, string>();
+    // Never drop/remap a note that's currently open (as the active or secondary tab) and has
+    // an edit not yet confirmed written to disk. Dropping it repoints activeId/secondaryId to
+    // a different id (see the remap below), which changes the preview pane's React `key` and
+    // forces a remount — silently discarding any not-yet-blurred contentEditable edit (the
+    // "text disappears while still focused, in split view" bug). Leaves the pair
+    // un-reconciled for this pass; it retries on the next poll once the note settles.
+    const isUnsafeLoser = (id: string) => (
+      (id === stateRef.current.activeId || id === stateRef.current.secondaryId)
+      && (stateRef.current.editedAt[id] || 0) > (lastWrittenAt.current.get(id) || 0)
+    );
     // Loser text to fold into each winner, deferred until after the disk-read step below —
     // the winner's own on-disk content may not have been read into `sources` yet (it can be
     // "stale" in the same sense as the self-healing check further down), so folding losers in
@@ -556,6 +668,7 @@ export function useNotesApp(showRightSidebar = true) {
       const winner = group.find((f) => f.path) ?? group[0];
       group.forEach((loser) => {
         if (loser.id === winner.id) return;
+        if (isUnsafeLoser(loser.id)) return;
         dropIds.add(loser.id);
         remap.set(loser.id, winner.id);
         if (winner.type === 'md' && stateRef.current.sources[loser.id]) {
@@ -593,6 +706,9 @@ export function useNotesApp(showRightSidebar = true) {
         return;
       }
       if (known.has(e.path)) return;
+      // Unsupported extensions (binaries, office docs…) would be typed 'md', fail every
+      // UTF-8 read, and get retried on every poll forever — don't adopt them at all.
+      if (!isSupportedFile(e.name)) return;
       const lastSlash = rel.lastIndexOf('/');
       const folder = lastSlash === -1 ? 'Notes' : rel.slice(0, lastSlash);
       const type = typeFromFilename(e.name);
@@ -610,7 +726,8 @@ export function useNotesApp(showRightSidebar = true) {
     // already-known vault file that's still missing its content (e.g. from before this
     // fix, or a prior failed read) gets picked up here too — so a stale/blank note
     // self-heals on next refresh.
-    const backfillFiles = backfills.map((b) => ({ ...current.find((f) => f.id === b.id)!, path: b.path }));
+    const currentById = new Map(current.map((f) => [f.id, f]));
+    const backfillFiles = backfills.map((b) => ({ ...currentById.get(b.id)!, path: b.path }));
     const stale = current.filter((f) => (
       f.path && !dropIds.has(f.id) && !backfills.some((b) => b.id === f.id) && f.type !== 'pdf' && f.type !== 'image'
       && (f.type === 'eml' ? !(f.id in stateRef.current.eml) : !(f.id in stateRef.current.sources))
@@ -623,8 +740,9 @@ export function useNotesApp(showRightSidebar = true) {
         // PDFs and images are binary — never read as UTF-8 text; PreviewPane points an iframe/img
         // straight at the file on disk via the asset protocol instead.
         if (!f.path || f.type === 'pdf' || f.type === 'image') return;
+        if (failedReads.current.has(f.path)) return;
         const raw = await readFile(f.path).catch(() => null);
-        if (raw === null) return;
+        if (raw === null) { failedReads.current.add(f.path); return; }
         if (f.type === 'eml') newEml[f.id] = parseEml(raw);
         else newSources[f.id] = raw;
       }));
@@ -644,9 +762,21 @@ export function useNotesApp(showRightSidebar = true) {
       mergedSources[winnerId] = base;
     });
     Object.assign(newSources, mergedSources);
+    // Never let a merge computed from a stale/in-flight-write snapshot get written to disk for
+    // a note with an edit newer than the last edit actually *confirmed* written — otherwise a
+    // real edit can be silently overwritten on disk by resurrected "duplicate" text, which then
+    // reads back as truth on the *next* refresh. Scoped to mergedSources specifically (not the
+    // general disk-read path below): a merge winner is, by construction, a note this session
+    // has already loaded/edited, so there's no first-load case here to worry about blocking —
+    // unlike freshSources below, which also covers notes never read into memory this session at
+    // all, where lastWrittenAt (an in-memory map, empty on every fresh launch) would otherwise
+    // wrongly appear "unwritten" forever for anything with an old *persisted* editedAt and block
+    // their very first load from disk.
+    const unsafeToWriteMerge = (id: string) => (stateRef.current.editedAt[id] || 0) > (lastWrittenAt.current.get(id) || 0);
     if (isTauri()) {
       Object.entries(mergedSources).forEach(([id, text]) => {
-        const f = current.find((c) => c.id === id);
+        if (unsafeToWriteMerge(id)) return;
+        const f = currentById.get(id);
         if (f?.path) writeFile(f.path, text).catch(() => {});
       });
     }
@@ -659,6 +789,15 @@ export function useNotesApp(showRightSidebar = true) {
         const newFolders = Array.from(discoveredFolders).filter((f) => !s.folderOrder.includes(f));
         const strip = <T,>(rec: Record<string, T>): Record<string, T> => (
           Object.fromEntries(Object.entries(rec).filter(([id]) => !dropIds.has(id)))
+        );
+        // A note the user edited while this refresh's disk reads were in flight must keep the
+        // newer in-memory text — the read snapshot is already stale for it. Merge-derived
+        // entries get the additional, stricter unsafeToWriteMerge check (see above).
+        const freshSources = Object.fromEntries(
+          Object.entries(newSources).filter(([id]) => {
+            if (id in mergedSources) return !unsafeToWriteMerge(id);
+            return !((s.editedAt[id] || 0) > refreshStart);
+          }),
         );
         const fileMoves = { ...s.fileMoves };
         backfills.forEach((b) => { fileMoves[b.id] = { ...fileMoves[b.id], path: b.path }; });
@@ -678,7 +817,7 @@ export function useNotesApp(showRightSidebar = true) {
             : s.noteOrder,
           createdAt: added.length ? { ...s.createdAt, ...Object.fromEntries(added.map((f) => [f.id, now])) } : s.createdAt,
           folderOrder: newFolders.length ? [...s.folderOrder, ...newFolders] : s.folderOrder,
-          sources: Object.keys(newSources).length || dropIds.size ? strip({ ...s.sources, ...newSources }) : s.sources,
+          sources: Object.keys(newSources).length || dropIds.size ? strip({ ...s.sources, ...freshSources }) : s.sources,
           eml: Object.keys(newEml).length || dropIds.size ? strip({ ...s.eml, ...newEml }) : s.eml,
           history: dropIds.size ? strip(s.history) : s.history,
           editedAt: dropIds.size ? strip(s.editedAt) : s.editedAt,
@@ -695,6 +834,7 @@ export function useNotesApp(showRightSidebar = true) {
   const pickVaultRoot = useCallback(async () => {
     const dir = await tauriPickVaultRoot();
     if (!dir) return;
+    failedReads.current.clear();
 
     // Switching (or connecting) a vault makes the sidebar mirror that folder only —
     // drop everything tied to whatever was showing before (old vault or demo data)
@@ -733,9 +873,52 @@ export function useNotesApp(showRightSidebar = true) {
   // "next check in Xs" countdown accurate instead of drifting from the real schedule.
   useEffect(() => {
     if (!isTauri() || !state.vaultRoot) return;
-    const id = window.setTimeout(() => { refreshVault(); }, VAULT_POLL_MS);
+    // First scan of a session runs almost immediately (lastSyncedAt is ephemeral, so it's
+    // null right after launch): disk-backed note contents aren't persisted to localStorage,
+    // so this initial read is what populates them.
+    const delay = state.lastSyncedAt == null ? 200 : VAULT_POLL_MS;
+    const id = window.setTimeout(() => { refreshVault(); }, delay);
     return () => window.clearTimeout(id);
   }, [refreshVault, state.vaultRoot, state.lastSyncedAt]);
+
+  // Registers the OS-level global quick-capture shortcut (feature 9). The handler toggles a
+  // small floating WebviewWindow (label "quickcapture", loading index.html?quickcapture=1 —
+  // see main.tsx/QuickCaptureWindow.tsx) rather than focusing the main window, so capture
+  // works without switching away from whatever app you're in. Re-registers whenever the
+  // configured accelerator string changes, unregistering the previous one first. No-op
+  // outside Tauri (the browser preview has no OS-level shortcut API).
+  useEffect(() => {
+    if (!isTauri()) return;
+    const shortcut = state.dailyGlobalShortcut;
+    if (!shortcut) return;
+    let cancelled = false;
+    let registered = false;
+    (async () => {
+      try {
+        const { register } = await import('@tauri-apps/plugin-global-shortcut');
+        await register(shortcut, async () => {
+          const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+          const existing = await WebviewWindow.getByLabel('quickcapture');
+          if (existing) {
+            if (await existing.isVisible()) { await existing.hide(); } else { await existing.show(); await existing.setFocus(); }
+            return;
+          }
+          new WebviewWindow('quickcapture', {
+            url: 'index.html?quickcapture=1',
+            width: 420, height: 220, center: true, decorations: false, resizable: false, alwaysOnTop: true, title: 'Quick Capture', skipTaskbar: true,
+          });
+        });
+        if (!cancelled) registered = true;
+      } catch {
+        /* not running under a Tauri build with this plugin wired up yet */
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (!registered) return;
+      import('@tauri-apps/plugin-global-shortcut').then(({ unregister }) => unregister(shortcut)).catch(() => {});
+    };
+  }, [state.dailyGlobalShortcut]);
 
   const toggleTask = useCallback((idx: number, forId?: string | null) => {
     const id = forId ?? stateRef.current.activeId;
@@ -746,20 +929,40 @@ export function useNotesApp(showRightSidebar = true) {
     setSource(id, lines.join('\n'));
   }, [setSource]);
 
-  const ensureDaily = useCallback((): string => {
-    const title = dailyTitle();
+  // Finds or creates the daily note for a given day (defaults to today), returning its id.
+  // The folder and seed content come from the configurable dailyFolder/dailyTemplate settings.
+  const ensureDaily = useCallback((dateISO?: string): string => {
+    const title = dateISO || dailyTitle();
+    const folder = stateRef.current.dailyFolder || 'Daily';
     const id = 'daily-' + title;
     const file = title + '.md';
     // Match by identity (folder+file), not just the synthetic id — a file that already
     // exists on disk (e.g. discovered by refreshVault under an `fs-` id) must be reused
     // rather than getting a second, independently-drifting entry.
-    const existing = all.find((f) => f.folder === 'Daily' && f.file === file);
+    const existing = all.find((f) => f.folder === folder && f.file === file);
     if (existing) return existing.id;
     if (!fileOf(id)) {
-      const body = '---\ntags: [daily]\n---\n# ' + title + '\n\n';
-      const nf: NoteFile = { id, title, file, type: 'md', folder: 'Daily', pinned: false };
+      let body = renderDailyTemplate(stateRef.current.dailyTemplate, title);
+      // Seed prompts as an unchecked checklist under a new Prompts section.
+      stateRef.current.dailyPrompts.forEach((prompt) => {
+        if (prompt.trim()) body = appendUnderSection(body, 'Prompts', buildTaskLine({ text: prompt.trim() }));
+      });
+      // Carry unchecked Tasks forward from the previous day, if it already exists — never
+      // creates the previous day just to check it.
+      if (stateRef.current.dailyCarryOverTasks) {
+        const prevFile = shiftISO(title, -1) + '.md';
+        const prevNote = all.find((f) => f.folder === folder && f.file === prevFile);
+        if (prevNote) {
+          const prevBody = stateRef.current.sources[prevNote.id] || '';
+          linesInSection(prevBody, 'Tasks').forEach((line) => {
+            const parsed = parseTaskLine(line);
+            if (parsed && !parsed.done) body = appendUnderSection(body, 'Tasks', line);
+          });
+        }
+      }
+      const nf: NoteFile = { id, title, file, type: 'md', folder, pinned: false };
       if (isTauri() && stateRef.current.vaultRoot) {
-        nf.path = vaultPath('Daily', file);
+        nf.path = vaultPath(folder, file);
         tauriCreateFile(nf.path, body).catch(() => {});
       }
       setState((s) => ({
@@ -775,6 +978,110 @@ export function useNotesApp(showRightSidebar = true) {
     const id = ensureDaily();
     setTimeout(() => open(id), 0);
   }, [ensureDaily, open]);
+
+  // Regenerates the ISO-week rollup note for the week containing `dateISO` (defaults to
+  // today) — a re-derived digest of that week's daily notes, so unlike ensureDaily it
+  // overwrites on every call rather than only creating once. Skips any day that has no
+  // note yet (never creates the missing days just to check them). Fixed 'Weekly' folder.
+  const generateWeeklyReview = useCallback((dateISO?: string) => {
+    const day = dateISO || todayISO();
+    const monday = isoWeekMonday(day);
+    const label = isoWeekLabel(day);
+    const folder = 'Weekly';
+    const file = label + '.md';
+    const id = 'weekly-' + label;
+    const dailyFolder = stateRef.current.dailyFolder || 'Daily';
+
+    const sections: Record<'Tasks' | 'Questions' | 'Log', string[]> = { Tasks: [], Questions: [], Log: [] };
+    for (let i = 0; i < 7; i++) {
+      const iso = shiftISO(monday, i);
+      const note = all.find((f) => f.folder === dailyFolder && f.file === iso + '.md');
+      if (!note) continue;
+      const body = stateRef.current.sources[note.id] || '';
+      (['Tasks', 'Questions', 'Log'] as const).forEach((h) => {
+        linesInSection(body, h).forEach((line) => sections[h].push(line));
+      });
+    }
+
+    let content = '# Week ' + label + '\n\n';
+    let any = false;
+    (['Tasks', 'Questions', 'Log'] as const).forEach((h) => {
+      if (sections[h].length) { any = true; content += '## ' + h + '\n' + sections[h].join('\n') + '\n\n'; }
+    });
+    if (!any) content += '_No daily-note entries for this week yet._\n';
+
+    const existing = all.find((f) => f.folder === folder && f.file === file);
+    const targetId = existing ? existing.id : id;
+    if (!existing) {
+      const nf: NoteFile = { id, title: label, file, type: 'md', folder, pinned: false };
+      if (isTauri() && stateRef.current.vaultRoot) {
+        nf.path = vaultPath(folder, file);
+        tauriCreateFile(nf.path, content).catch(() => {});
+      }
+      setState((s) => ({
+        dynamicFiles: [...s.dynamicFiles, nf],
+        sources: { ...s.sources, [id]: content },
+        createdAt: { ...s.createdAt, [id]: Date.now() },
+      }));
+    } else {
+      setState((s) => ({ sources: { ...s.sources, [targetId]: content }, editedAt: { ...s.editedAt, [targetId]: Date.now() } }));
+      markDirty(targetId);
+    }
+    setTimeout(() => open(targetId), 0);
+  }, [all, markDirty, open, setState, vaultPath]);
+
+  const openDailyCapture = useCallback(() => setState({ dailyCaptureOpen: true, dailyCaptureText: '', dailyCaptureDate: todayISO() }), [setState]);
+  const closeDailyCapture = useCallback(() => setState({ dailyCaptureOpen: false }), [setState]);
+
+  // Opens (creating on demand) the daily note for a specific day and navigates to it —
+  // used by the daily-note day-navigation arrows in the breadcrumb bar.
+  const openDailyFor = useCallback((dateISO: string) => {
+    const id = ensureDaily(dateISO);
+    setTimeout(() => open(id), 0);
+  }, [ensureDaily, open]);
+
+  // Appends a capture to a day's note without navigating there — the whole point of
+  // quick-capture. Reuses the same markDirty/persist path as addTaskLine. A leading
+  // `todo`/`q`/`?` prefix routes the entry into a Tasks/Questions section; anything else
+  // becomes a timestamped bullet under Log (see routeDailyCapture).
+  const appendDaily = useCallback((text: string, dateISO?: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    const day = dateISO || todayISO();
+    const id = ensureDaily(day);
+    const body = linkifyMentions(trimmed, all.map((f) => f.title));
+    const { heading, line } = routeDailyCapture(body);
+    const folder = stateRef.current.dailyFolder || 'Daily';
+    setTimeout(() => {
+      setState((s) => {
+        const prev = s.sources[id] || '';
+        captureUndoRef.current = { id, prevSource: prev };
+        return {
+          sources: { ...s.sources, [id]: appendUnderSection(prev, heading, line) },
+          editedAt: { ...s.editedAt, [id]: Date.now() },
+          toast: { message: 'Added to ' + folder + ' / ' + day },
+        };
+      });
+      markDirty(id);
+    }, 0);
+  }, [all, ensureDaily, markDirty, setState]);
+
+  const saveDailyCapture = useCallback(() => {
+    const s = stateRef.current;
+    appendDaily(s.dailyCaptureText, s.dailyCaptureDate || undefined);
+    setState({ dailyCaptureOpen: false, dailyCaptureText: '' });
+  }, [appendDaily, setState]);
+
+  // Restores the daily note to its pre-capture state (invoked from the toast's Undo).
+  const undoLastCapture = useCallback(() => {
+    const u = captureUndoRef.current;
+    if (!u) { setState({ toast: null }); return; }
+    setState((s) => ({ sources: { ...s.sources, [u.id]: u.prevSource }, editedAt: { ...s.editedAt, [u.id]: Date.now() }, toast: null }));
+    markDirty(u.id);
+    captureUndoRef.current = null;
+  }, [markDirty, setState]);
+
+  const dismissToast = useCallback(() => setState({ toast: null }), [setState]);
 
   // Lets the sidebar highlight its Daily Note button the same way it highlights Tasks
   // (state.activeId === TASK_MANAGER_ID) without duplicating the 'daily-' + dailyTitle() id
@@ -805,24 +1112,20 @@ export function useNotesApp(showRightSidebar = true) {
     const line = buildTaskLine({ text: txt, due: opts.due, priority: opts.priority });
     const explicitTarget = opts.targetId;
     const id = explicitTarget || ensureDaily();
-    const path = explicitTarget
-      ? fileOf(explicitTarget)?.path
-      : (isTauri() && stateRef.current.vaultRoot ? vaultPath('Daily', dailyTitle() + '.md') : undefined);
     const navigate = opts.navigate !== false;
     setTimeout(() => {
       setState((s2) => {
         const prev = s2.sources[id] || '';
         const sep = prev && !prev.endsWith('\n') ? '\n' : '';
-        const next = prev + sep + line + '\n';
-        if (isTauri() && path) writeFile(path, next).catch(() => {});
         return {
-          sources: { ...s2.sources, [id]: next },
+          sources: { ...s2.sources, [id]: prev + sep + line + '\n' },
           editedAt: { ...s2.editedAt, [id]: Date.now() },
         };
       });
+      markDirty(id);
       if (navigate) open(id);
     }, 0);
-  }, [ensureDaily, fileOf, open, setState, vaultPath]);
+  }, [ensureDaily, markDirty, open, setState]);
 
   const saveAddTask = useCallback(() => {
     const s = stateRef.current;
@@ -865,7 +1168,7 @@ export function useNotesApp(showRightSidebar = true) {
     const a = fileOf(targetId ?? stateRef.current.activeId);
     const w = window.open('', '_blank');
     if (!w) return;
-    w.document.write('<!doctype html><meta charset="utf-8"><title>' + (a ? a.title : '') + '</title><body style="font-family:-apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:var(--text-primary)">' + currentExportHtml(a?.id) + '</body>');
+    w.document.write('<!doctype html><meta charset="utf-8"><title>' + esc(a ? a.title : '') + '</title>' + EXPORT_STYLE + '<body style="font-family:-apple-system,system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#26241f">' + currentExportHtml(a?.id) + '</body>');
     w.document.close();
     setTimeout(() => { try { w.print(); } catch { /* ignore */ } }, 350);
   }, [currentExportHtml, fileOf]);
@@ -885,7 +1188,7 @@ export function useNotesApp(showRightSidebar = true) {
   const exportDoc = useCallback((targetId?: string | null) => {
     const a = fileOf(targetId ?? stateRef.current.activeId);
     if (!a) return;
-    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"></head><body>' + currentExportHtml(a.id) + '</body></html>';
+    const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">' + EXPORT_STYLE + '</head><body>' + currentExportHtml(a.id) + '</body></html>';
     download((a.title || 'document') + '.doc', html, 'application/msword');
   }, [currentExportHtml, fileOf]);
 
@@ -944,7 +1247,8 @@ export function useNotesApp(showRightSidebar = true) {
     else if (ms) sug = { kind: 'slash', q: ms[1], caret, pane: 'primary' };
     setState((s) => ({ sources: { ...s.sources, [id]: v }, suggest: sug }));
     touch(id);
-  }, [setState, touch]);
+    markDirty(id);
+  }, [markDirty, setState, touch]);
 
   // secondary (split) pane mirror of onSourceInput above — same duplication convention as
   // onPreviewClick/onPreviewClickSecondary.
@@ -961,7 +1265,8 @@ export function useNotesApp(showRightSidebar = true) {
     else if (ms) sug = { kind: 'slash', q: ms[1], caret, pane: 'secondary' };
     setState((s) => ({ sources: { ...s.sources, [id]: v }, suggest: sug }));
     touch(id);
-  }, [setState, touch]);
+    markDirty(id);
+  }, [markDirty, setState, touch]);
 
   const pickSuggest = useCallback((item: string) => {
     const sg = stateRef.current.suggest;
@@ -976,12 +1281,13 @@ export function useNotesApp(showRightSidebar = true) {
     const insert = sg.kind === 'wiki' ? '[[' + item + ']]' : item;
     const nv = v.slice(0, start) + insert + v.slice(caret);
     setState({ sources: { ...stateRef.current.sources, [id]: nv }, suggest: null });
+    markDirty(id);
     const el = isSecondary ? sourceElRef2.current : sourceElRef.current;
     if (el) {
       const pos = start + insert.length;
       setTimeout(() => { try { el.focus(); el.setSelectionRange(pos, pos); } catch { /* ignore */ } }, 10);
     }
-  }, [setState]);
+  }, [markDirty, setState]);
 
   const selectPreviewTextInSource = useCallback((text: string, pane: 'primary' | 'secondary' = 'primary') => {
     const t = text.trim();
@@ -1018,7 +1324,7 @@ export function useNotesApp(showRightSidebar = true) {
       else if (meta && k === 'g') { e.preventDefault(); setState((s2) => ({ graphOpen: !s2.graphOpen })); }
       else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); openAddTask(); }
       else if (meta && e.shiftKey && k === 't') { e.preventDefault(); openTaskManager(); }
-      else if (meta && e.shiftKey && k === 'd') { e.preventDefault(); openDaily(); }
+      else if (meta && e.shiftKey && k === 'd') { e.preventDefault(); openDailyCapture(); }
       else if (meta && k === 'e' && s.activeId) {
         e.preventDefault();
         const id = (s.secondaryFocused && s.secondaryId) ? s.secondaryId : s.activeId;
@@ -1030,11 +1336,11 @@ export function useNotesApp(showRightSidebar = true) {
       else if (meta && /^[1-9]$/.test(e.key)) { const i = +e.key - 1; if (s.openTabs[i]) { e.preventDefault(); open(s.openTabs[i]); } }
       else if (meta && e.shiftKey && e.key === '|') { e.preventDefault(); setState((s2) => ({ railHidden: !s2.railHidden })); }
       else if (meta && e.key === '\\') { e.preventDefault(); setState((s2) => ({ collapsed: !s2.collapsed })); }
-      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, historyTargetId: null, graphOpen: false, addTaskOpen: false, shortcutsOpen: false, exportOpen: false, exportOpenSecondary: false, suggest: null, smartFilterModalOpen: false }); }
+      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, historyTargetId: null, graphOpen: false, addTaskOpen: false, dailyCaptureOpen: false, shortcutsOpen: false, exportOpen: false, exportOpenSecondary: false, suggest: null, smartFilterModalOpen: false }); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTab, open, openAddTask, openDaily, openTaskManager, setState, setView]);
+  }, [closeTab, open, openAddTask, openDaily, openDailyCapture, openTaskManager, setState, setView]);
 
   // focus management
   useEffect(() => {
@@ -1043,6 +1349,15 @@ export function useNotesApp(showRightSidebar = true) {
   useEffect(() => {
     if (state.addTaskOpen && addTaskInputRef.current) setTimeout(() => { try { addTaskInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
   }, [state.addTaskOpen]);
+  useEffect(() => {
+    if (state.dailyCaptureOpen && dailyCaptureInputRef.current) setTimeout(() => { try { dailyCaptureInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
+  }, [state.dailyCaptureOpen]);
+  // Auto-dismiss the capture toast after a few seconds; re-arms whenever a new toast appears.
+  useEffect(() => {
+    if (!state.toast) return;
+    const t = window.setTimeout(() => setState({ toast: null }), 5000);
+    return () => window.clearTimeout(t);
+  }, [state.toast, setState]);
 
   // =================== derived view model ===================
   // View mode is per-tab (viewByNote), not global — falls back to defaultView (Settings'
@@ -1061,7 +1376,15 @@ export function useNotesApp(showRightSidebar = true) {
   const showSource = !!active && !isPdf && !isImage && (activeView === 'edit' || activeView === 'split');
   const showPreview = !!active && (isPdf || isImage || activeView === 'preview' || activeView === 'split');
 
-  const primaryDoc = deriveDoc(active, state.sources, state.eml, state.wiki, '');
+  // Memoized on exactly what each pane reads — its own note's source/eml entry — so a
+  // keystroke re-renders markdown once for the pane being typed in, and unrelated state
+  // changes (palette typing, drag hovers, the other pane's edits) re-render neither.
+  const activeSource = (active && state.sources[active.id]) || '';
+  const activeEmlEntry = active ? state.eml[active.id] : undefined;
+  const primaryDoc = useMemo(
+    () => deriveDoc(active, activeSource, activeEmlEntry, state.wiki, ''),
+    [active, activeSource, activeEmlEntry, state.wiki],
+  );
   const {
     sourceValue, outline, words, activeTags, frontMatter, emlData, mdHtml,
   } = primaryDoc;
@@ -1069,7 +1392,12 @@ export function useNotesApp(showRightSidebar = true) {
   mermaidBlocksRef.current = primaryDoc.mermaidBlocks;
 
   const secondaryFile = fileOf(state.secondaryId);
-  const secondaryDoc = deriveDoc(secondaryFile, state.sources, state.eml, state.wiki, 'sec-');
+  const secondarySource = (secondaryFile && state.sources[secondaryFile.id]) || '';
+  const secondaryEmlEntry = secondaryFile ? state.eml[secondaryFile.id] : undefined;
+  const secondaryDoc = useMemo(
+    () => deriveDoc(secondaryFile, secondarySource, secondaryEmlEntry, state.wiki, 'sec-'),
+    [secondaryFile, secondarySource, secondaryEmlEntry, state.wiki],
+  );
   codeBlocksRef2.current = secondaryDoc.codeBlocks;
   mermaidBlocksRef2.current = secondaryDoc.mermaidBlocks;
   // The edit/split/preview toggle follows whichever pane currently has focus — the unfocused
@@ -1096,7 +1424,7 @@ export function useNotesApp(showRightSidebar = true) {
       try { katex.render(el.getAttribute('data-tex') || '', el as HTMLElement, { throwOnError: false }); } catch { /* ignore */ }
     });
     if (!mermaidInit) {
-      try { mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'neutral' }); } catch { /* ignore */ }
+      try { mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral' }); } catch { /* ignore */ }
       mermaidInit = true;
     }
     root.querySelectorAll('.mmd:not([data-done])').forEach((el, i) => {
@@ -1119,7 +1447,7 @@ export function useNotesApp(showRightSidebar = true) {
       try { katex.render(el.getAttribute('data-tex') || '', el as HTMLElement, { throwOnError: false }); } catch { /* ignore */ }
     });
     if (!mermaidInit) {
-      try { mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'neutral' }); } catch { /* ignore */ }
+      try { mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral' }); } catch { /* ignore */ }
       mermaidInit = true;
     }
     root.querySelectorAll('.mmd:not([data-done])').forEach((el, i) => {
@@ -1133,13 +1461,34 @@ export function useNotesApp(showRightSidebar = true) {
     });
   }, [secondaryDoc.isMd, secondaryDoc.mdHtml]);
 
-  // backlinks
-  const backlinks = (active && backlinkMap[active.id]) || [];
+  // backlinks — computed from real [[wiki]] links in note bodies (the old static
+  // backlinkMap only covered the seed/demo notes, so vault notes never showed any).
+  const backlinksFor = useCallback((target: NoteFile | undefined) => {
+    const out: { id: string; title: string; snippet: string }[] = [];
+    if (!target) return out;
+    const needle = '[[' + target.title.toLowerCase();
+    all.forEach((f) => {
+      if (f.id === target.id) return;
+      const flat = bodyOf(f).replace(/<[^>]+>/g, ' ');
+      const idx = flat.toLowerCase().indexOf(needle);
+      if (idx === -1) return;
+      const snip = flat.slice(Math.max(0, idx - 24), idx + needle.length + 26).replace(/\s+/g, ' ').trim();
+      out.push({ id: f.id, title: f.title, snippet: '…' + snip + '…' });
+    });
+    return out;
+  }, [all, bodyOf]);
+  const backlinks = useMemo(() => backlinksFor(active), [backlinksFor, active, state.sources, state.eml]);
+  const secondaryBacklinks = useMemo(
+    () => backlinksFor(secondaryFile),
+    [backlinksFor, secondaryFile, state.sources, state.eml],
+  );
 
-  // unlinked mentions
+  // unlinked mentions — a full-vault text scan, so only computed while the context rail
+  // (its sole consumer) is actually visible.
+  const railVisible = showRightSidebar && !state.railHidden;
   const unlinked = useMemo(() => {
     const out: { id: string; title: string; snippet: string }[] = [];
-    if (active) {
+    if (active && railVisible) {
       const title = active.title.toLowerCase();
       all.forEach((f) => {
         if (f.id === active.id) return;
@@ -1153,10 +1502,11 @@ export function useNotesApp(showRightSidebar = true) {
       });
     }
     return out;
-  }, [active, all, bodyOf, state.sources, state.eml]);
+  }, [active, all, bodyOf, railVisible, state.sources, state.eml]);
 
-  // graph
+  // graph — scans every note body for wiki links, so only computed while the modal is open
   const graph = useMemo(() => {
+    if (!state.graphOpen) return { nodes: [], edges: [] };
     const gIndex: Record<string, string> = {};
     all.forEach((f) => { gIndex[f.title.toLowerCase()] = f.id; });
     const cx = 360, cy = 200, RAD = 150;
@@ -1187,19 +1537,25 @@ export function useNotesApp(showRightSidebar = true) {
       }
     });
     return { nodes, edges };
-  }, [all, bodyOf, state.activeId, state.sources, state.eml]);
+  }, [all, bodyOf, state.activeId, state.graphOpen, state.sources, state.eml]);
 
-  // command palette results
+  // command palette results — full-text search across the vault, only while it's open
   const paletteResults = useMemo(() => {
-    const q = state.paletteQuery.trim().toLowerCase();
-    const titleHits = all.filter((f) => !q || f.title.toLowerCase().includes(q) || f.file.toLowerCase().includes(q));
+    if (!state.paletteOpen) return [];
+    const trimmed = state.paletteQuery.trim();
+    // A `@daily` prefix scopes both the title and text search to notes in the daily folder
+    // only — stripped before matching, so the rest of the query behaves identically.
+    const dailyOnly = /^@daily\b/i.test(trimmed);
+    const q = (dailyOnly ? trimmed.replace(/^@daily\s*/i, '') : trimmed).toLowerCase();
+    const scope = dailyOnly ? all.filter((f) => f.folder === (stateRef.current.dailyFolder || 'Daily')) : all;
+    const titleHits = scope.filter((f) => !q || f.title.toLowerCase().includes(q) || f.file.toLowerCase().includes(q));
     const fileResults = titleHits.map((f) => ({
       kind: 'file' as const, id: f.id, title: f.title, hint: f.folder, icon: f.type.toUpperCase(),
     }));
     const textResults: { kind: 'text'; id: string; title: string; hint: string; icon: string }[] = [];
     if (q) {
       const titleIds = new Set(titleHits.map((f) => f.id));
-      all.forEach((f) => {
+      scope.forEach((f) => {
         if (titleIds.has(f.id)) return;
         const body = bodyOf(f).replace(/<[^>]+>/g, ' ');
         const idx = body.toLowerCase().indexOf(q);
@@ -1208,9 +1564,13 @@ export function useNotesApp(showRightSidebar = true) {
         textResults.push({ kind: 'text', id: f.id, title: f.title, hint: '…' + snip + '…', icon: '⌕' });
       });
     }
-    const cmds = [
+    // Skip commands while in the @daily scoped-search flow — the user is clearly searching,
+    // not looking to run a command.
+    const cmds = dailyOnly ? [] : [
       { title: 'New Markdown Note', run: 'newNote' },
       { title: "Open Today's Daily Note", run: 'openDaily' },
+      { title: 'Search Daily Notes', run: 'searchDaily' },
+      { title: 'Generate Weekly Review', run: 'weeklyReview' },
       { title: 'Add Task', run: 'addTask' },
       { title: 'Open Task Manager', run: 'taskManager' },
       { title: 'Graph View', run: 'graph' },
@@ -1223,14 +1583,22 @@ export function useNotesApp(showRightSidebar = true) {
     ].filter((c) => !q || c.title.toLowerCase().includes(q))
       .map((c) => ({ kind: 'cmd' as const, id: c.run, title: c.title, hint: 'command', icon: '⌘' }));
     return [...fileResults, ...textResults, ...cmds];
-  }, [all, bodyOf, state.paletteQuery, state.sources, state.eml]);
+  }, [all, bodyOf, state.paletteOpen, state.paletteQuery, state.sources, state.eml]);
 
   const runPaletteResult = useCallback((r: { kind: string; id: string }) => {
     if (r.kind === 'file' || r.kind === 'text') { setState({ paletteOpen: false }); open(r.id); return; }
+    // Unlike the other commands, this one keeps the palette open — it's priming a scoped
+    // search, not finishing an action — and refocuses the input so typing resumes seamlessly.
+    if (r.id === 'searchDaily') {
+      setState({ paletteQuery: '@daily ', paletteIdx: 0 });
+      setTimeout(() => { try { paletteInputRef.current?.focus(); } catch { /* ignore */ } }, 20);
+      return;
+    }
     setState({ paletteOpen: false });
     switch (r.id) {
       case 'newNote': openOrCreate('Untitled ' + (stateRef.current.dynamicFiles.length + 1)); break;
       case 'openDaily': openDaily(); break;
+      case 'weeklyReview': generateWeeklyReview(); break;
       case 'addTask': openAddTask(); break;
       case 'taskManager': openTaskManager(); break;
       case 'graph': setState({ graphOpen: true }); break;
@@ -1241,7 +1609,7 @@ export function useNotesApp(showRightSidebar = true) {
       case 'window': try { window.open(location.href, '_blank'); } catch { /* ignore */ } break;
       case 'settings': setState({ settingsOpen: true }); break;
     }
-  }, [open, openAddTask, openDaily, openOrCreate, openTaskManager, setState]);
+  }, [generateWeeklyReview, open, openAddTask, openDaily, openOrCreate, openTaskManager, setState]);
 
   // find & replace — targets whichever pane is focused (same as onSourceInput), not always
   // the primary file, since findNextFn below already implicitly follows focus via sourceElRef.
@@ -1263,13 +1631,20 @@ export function useNotesApp(showRightSidebar = true) {
     } catch { /* ignore */ }
   }, [fileOf, focusedNoteId, setSource]);
   const findNextFn = useCallback(() => {
-    const el = sourceElRef.current;
-    if (!el || !stateRef.current.findQuery) return;
+    const s = stateRef.current;
+    // Same focus resolution as findCount/replaceAllFn above — find-next must act on the
+    // pane being searched, not always the primary one, and honor the regex toggle.
+    const el = (s.secondaryFocused && s.secondaryId) ? sourceElRef2.current : sourceElRef.current;
+    if (!el || !s.findQuery) return;
+    let re: RegExp;
+    try {
+      re = s.findRegex ? new RegExp(s.findQuery, 'g') : new RegExp(escapeRegExp(s.findQuery), 'g');
+    } catch { return; }
     const txt = el.value;
-    const from = el.selectionEnd || 0;
-    let idx = txt.indexOf(stateRef.current.findQuery, from);
-    if (idx === -1) idx = txt.indexOf(stateRef.current.findQuery, 0);
-    if (idx >= 0) { el.focus(); el.setSelectionRange(idx, idx + stateRef.current.findQuery.length); }
+    re.lastIndex = el.selectionEnd || 0;
+    let m = re.exec(txt);
+    if (!m || !m[0].length) { re.lastIndex = 0; m = re.exec(txt); }
+    if (m && m[0].length) { el.focus(); el.setSelectionRange(m.index, m.index + m[0].length); }
   }, []);
 
   // suggestions
@@ -1361,10 +1736,27 @@ export function useNotesApp(showRightSidebar = true) {
   }, [state.noteOrder]);
   const orderIdx = useCallback((id: string) => orderIndex.get(id) ?? Number.MAX_SAFE_INTEGER, [orderIndex]);
 
+  // Grouped once per files/order change instead of filtering `all` on every childrenOf
+  // call — the sidebar calls it per visible row, which was O(rows × files) per render.
+  const childrenByParent = useMemo(() => {
+    const m = new Map<string, NoteFile[]>();
+    all.forEach((f) => {
+      if (!f.parent) return;
+      const list = m.get(f.parent) || [];
+      list.push(f);
+      m.set(f.parent, list);
+    });
+    m.forEach((list) => list.sort((a, b) => orderIdx(a.id) - orderIdx(b.id)));
+    return m;
+  }, [all, orderIdx]);
+
   const childrenOf = useCallback(
-    (pid: string) => all.filter((f) => f.parent === pid).sort((a, b) => orderIdx(a.id) - orderIdx(b.id)),
-    [all, orderIdx],
+    (pid: string) => childrenByParent.get(pid) || [],
+    [childrenByParent],
   );
+
+  // Set-lookup companion to state.dynamicFiles for per-row checks in the sidebar.
+  const dynamicIds = useMemo(() => new Set(state.dynamicFiles.map((f) => f.id)), [state.dynamicFiles]);
 
   const depthOf = useCallback((id: string): number => {
     let depth = 0;
@@ -1680,10 +2072,20 @@ export function useNotesApp(showRightSidebar = true) {
       list.push(path);
       byParent.set(parent, list);
     });
+    // Group visible root notes by folder up front — filtering `all` once instead of once
+    // per folder node.
+    const rootsByFolder = new Map<string, NoteFile[]>();
+    all.forEach((f) => {
+      if (f.parent || !pred(f)) return;
+      const list = rootsByFolder.get(f.folder) || [];
+      list.push(f);
+      rootsByFolder.set(f.folder, list);
+    });
+    rootsByFolder.forEach((list) => list.sort((a, b) => orderIdx(a.id) - orderIdx(b.id)));
     const build = (parent: string | undefined): FolderNode[] => (byParent.get(parent) || []).map((path) => ({
       path,
       name: folderLeafName(path),
-      roots: all.filter((f) => f.folder === path && !f.parent && pred(f)).sort((a, b) => orderIdx(a.id) - orderIdx(b.id)),
+      roots: rootsByFolder.get(path) || [],
       children: build(path),
     }));
     const hasVisibleContent = (node: FolderNode): boolean => node.roots.length > 0 || node.children.some(hasVisibleContent);
@@ -1745,7 +2147,7 @@ export function useNotesApp(showRightSidebar = true) {
     emlData: secondaryDoc.emlData,
     words: secondaryDoc.words,
     frontMatter: secondaryDoc.frontMatter,
-    backlinks: (secondaryFile && backlinkMap[secondaryFile.id]) || [],
+    backlinks: secondaryBacklinks,
     previewElRef: previewElRef2,
     onPreviewClick: onPreviewClickSecondary,
     sourceElRef: sourceElRef2,
@@ -1770,18 +2172,20 @@ export function useNotesApp(showRightSidebar = true) {
     accent: ACCENT, accentSoft: ACCENT_SOFT,
     showRightSidebar,
     // refs
-    sourceElRef, previewElRef, paletteInputRef, addTaskInputRef,
+    sourceElRef, previewElRef, paletteInputRef, addTaskInputRef, dailyCaptureInputRef,
     // split pane
     secondary, openSplit, closeSplitPane, pairTabs, reorderTab,
     // actions
     open, closeTab, closeAllTabs, closeOtherTabs, touch, setSource, setEml, aiGenerate, toggleTask, openOrCreate,
     tasks, taskCounts,
     openAddTask, closeAddTask, saveAddTask, addTaskLine, openTaskManager, openFolder, ensureDaily, openDaily, dailyNoteId,
+    openDailyCapture, closeDailyCapture, appendDaily, saveDailyCapture, openDailyFor, undoLastCapture, dismissToast,
+    generateWeeklyReview,
     currentExportHtml, exportPrint, exportDownload, exportDoc, exportCopyHtml,
     onPreviewClick, onSourceInput, scrollTo, selectPreviewTextInSource,
     openInBrowser,
     agoLabel,
-    childrenOf, newFile, duplicateFile, moveFileTo, deleteFile, toggleExpand, pickVaultRoot, refreshVault,
+    childrenOf, dynamicIds, newFile, duplicateFile, moveFileTo, deleteFile, toggleExpand, pickVaultRoot, refreshVault,
     reorderNote, reorderFolder, depthOf, renameFile, collapseAllFolders, createFolder,
     createCustomFilter, updateCustomFilter, deleteCustomFilter, openSmartFilterCreator, closeSmartFilterModal, applyFilter,
     customFilterCounts, togglePinFile, togglePinFolder, revealFile, revealFolder,

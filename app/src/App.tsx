@@ -13,6 +13,8 @@ import CommandPalette from './components/CommandPalette';
 import HistoryModal from './components/HistoryModal';
 import GraphModal from './components/GraphModal';
 import AddTaskModal from './components/AddTaskModal';
+import DailyCaptureModal from './components/DailyCaptureModal';
+import Toast from './components/Toast';
 import ShortcutsModal from './components/ShortcutsModal';
 import SettingsModal from './components/SettingsModal';
 import SmartFilterModal from './components/SmartFilterModal';
@@ -124,6 +126,8 @@ export default function App() {
       <HistoryModal vm={vm} />
       <GraphModal vm={vm} />
       <AddTaskModal vm={vm} />
+      <DailyCaptureModal vm={vm} />
+      <Toast vm={vm} />
       <ShortcutsModal vm={vm} />
       <SettingsModal vm={vm} />
       <SmartFilterModal vm={vm} />
