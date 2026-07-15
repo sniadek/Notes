@@ -19,24 +19,6 @@ const ACCENT_SOFT = 'var(--accent-soft)';
 export type NoteZone = 'before' | 'after' | 'inside';
 export type FolderDragOver = { path: string; zone: NoteZone } | null;
 
-interface FilterDef {
-  key: string;
-  label: string;
-  count: number;
-  color?: string;
-  star?: boolean;
-}
-
-function filterDefs(all: NoteFile[]): FilterDef[] {
-  const cnt = (fn: (f: NoteFile) => boolean) => all.filter(fn).length;
-  return [
-    { key: 'all', label: 'All Notes', count: all.length, color: '#8a8a93' },
-    { key: 'markdown', label: 'Markdown', count: cnt((f) => f.type === 'md'), color: '#6c7686' },
-    { key: 'html', label: 'HTML', count: cnt((f) => f.type === 'html'), color: '#b5651d' },
-    { key: 'email', label: 'Email Templates', count: cnt((f) => f.type === 'eml'), color: '#3a6ea5' },
-  ];
-}
-
 function sectionLabelStyle(cowork: boolean): CSSProperties {
   return cowork
     ? {
@@ -94,7 +76,9 @@ function PinStar({ pinned, onToggle }: { pinned: boolean; onToggle: () => void }
     <span
       onClick={(e) => { e.stopPropagation(); onToggle(); }}
       title={pinned ? 'Unpin' : 'Pin'}
-      style={{ color: pinned ? '#d6a419' : 'var(--text-faintest)', fontSize: 10, flex: 'none', cursor: 'pointer' }}
+      style={{ color: pinned ? '#d6a419' : 'var(--text-muted)', fontSize: 11, flex: 'none', cursor: 'pointer', padding: '1px 2px', borderRadius: 4 }}
+      onMouseEnter={(e) => { if (!pinned) { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
+      onMouseLeave={(e) => { if (!pinned) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; } }}
     >
       {pinned ? '★' : '☆'}
     </span>
@@ -217,7 +201,9 @@ export function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, 
         <PinStar pinned={file.pinned} onToggle={() => vm.togglePinFile(file.id)} />
         <span
           onClick={(e) => { e.stopPropagation(); setMenuOpen((m) => !m); }}
-          style={{ color: 'var(--text-faintest)', fontSize: 12, padding: '0 2px', flex: 'none' }}
+          style={{ color: 'var(--text-muted)', fontSize: 12, padding: '0 3px', borderRadius: 4, flex: 'none' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
           title="More"
         >
           ⋯
@@ -336,7 +322,9 @@ export function FolderRow({ vm, node, depth, cowork, dragOverId, dragZone, setDr
         <span
           onClick={(e) => { e.stopPropagation(); setMenuOpen((m) => !m); }}
           title="More"
-          style={{ color: 'var(--text-faintest)', fontSize: 13, padding: '0 3px', flex: 'none' }}
+          style={{ color: 'var(--text-muted)', fontSize: 13, padding: '0 3px', borderRadius: 4, flex: 'none' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
         >
           ⋯
         </span>
@@ -400,16 +388,16 @@ function PinnedFolderRow({ vm, path, cowork }: { vm: NotesAppVM; path: string; c
 
 export default function Sidebar({ vm }: { vm: NotesAppVM }) {
   const {
-    state, all, folderTree, tagCount, recentDocs, recentlyCreated, pinnedFiles, pinnedFolderPaths,
+    state, folderTree, tagCount, recentDocs, recentlyCreated, pinnedFiles, pinnedFolderPaths,
   } = vm;
   const cowork = state.design === 'cowork-plus';
-  const defs = filterDefs(all);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [dragZone, setDragZone] = useState<NoteZone | null>(null);
   const [folderDragOver, setFolderDragOver] = useState<FolderDragOver>(null);
   const [filterMenuOpenId, setFilterMenuOpenId] = useState<string | null>(null);
   const calendarRef = useCloseOnOutsideClick(state.calendarOpen, () => vm.setState({ calendarOpen: false }));
 
+  const smartFiltersExpanded = state.expandedDocs['section:smart-filters'] !== false;
   const pinnedExpanded = state.expandedDocs['section:pinned'] !== false;
   const recentExpanded = state.expandedDocs['section:recent'] === true;
   const createdExpanded = state.expandedDocs['section:created'] === true;
@@ -435,20 +423,19 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
         >
           <CalendarIcon />
         </div>
-        {defs.map((f) => {
-          const on = state.filter === f.key;
+        {state.customFilters.map((cf) => {
+          const key = 'custom:' + cf.id;
+          const on = state.filter === key;
           return (
             <div
-              key={f.key}
-              onClick={() => vm.applyFilter(f.key, { collapsed: false })}
-              title={f.label}
+              key={cf.id}
+              onClick={() => vm.applyFilter(key, { collapsed: false })}
+              title={cf.label}
               style={{ width: 34, height: 34, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: on ? ACCENT_SOFT : 'transparent' }}
             >
-              {f.star
-                ? <span style={{ color: '#d6a419', fontSize: 14 }}>★</span>
-                : cowork
-                  ? <span style={{ fontSize: 14, color: 'var(--text-faintest)' }}>○</span>
-                  : <span style={{ width: 11, height: 11, borderRadius: 3, background: f.color, display: 'block' }} />}
+              {cowork
+                ? <span style={{ fontSize: 14, color: 'var(--text-faintest)' }}>○</span>
+                : <span style={{ width: 11, height: 11, borderRadius: 3, background: cf.color, display: 'block' }} />}
             </div>
           );
         })}
@@ -491,6 +478,15 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
               {vm.taskCounts}
             </span>
           )}
+          <span
+            onClick={(e) => { e.stopPropagation(); vm.openAddTask(); }}
+            title="Add task (⌘⇧N)"
+            style={{ color: 'var(--text-muted)', fontSize: 13, padding: '0 3px', borderRadius: 4, flex: 'none' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+          >
+            +
+          </span>
         </div>
         <div ref={calendarRef} style={{ position: 'relative', marginBottom: 10 }}>
           <div
@@ -506,45 +502,33 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             <span
               onClick={(e) => { e.stopPropagation(); vm.setState((s) => ({ calendarOpen: !s.calendarOpen })); }}
               title="Browse daily notes"
-              style={{ color: 'var(--text-faintest)', fontSize: 11, padding: '0 2px', flex: 'none' }}
+              style={{ color: 'var(--text-muted)', fontSize: 11, padding: '0 3px', borderRadius: 4, flex: 'none' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
             >
               ▾
             </span>
           </div>
           {state.calendarOpen && <DailyCalendar vm={vm} onClose={() => vm.setState({ calendarOpen: false })} />}
         </div>
-        <div style={{ ...sectionLabelStyle(cowork), padding: cowork ? '4px 11px 8px' : '4px 11px 7px', cursor: 'default' }}>
-          <span>{cowork ? 'Smart filters' : 'SMART FILTERS'}</span>
+        <div
+          style={{ ...sectionLabelStyle(cowork), padding: cowork ? '4px 11px 8px' : '4px 11px 7px' }}
+          onClick={() => vm.toggleExpand('section:smart-filters')}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{smartFiltersExpanded ? '▾' : '▸'}</span>
+            {cowork ? 'Smart filters' : 'SMART FILTERS'}
+          </span>
           <span
-            onClick={() => vm.openSmartFilterCreator()}
+            onClick={(e) => { e.stopPropagation(); vm.openSmartFilterCreator(); }}
             title="New smart filter"
             style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 13 }}
           >
             +
           </span>
         </div>
+        {smartFiltersExpanded && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {defs.map((f) => {
-            const on = state.filter === f.key;
-            return (
-              <div
-                key={f.key}
-                onClick={() => vm.applyFilter(f.key)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: cowork ? '8px 11px' : '6px 11px', borderRadius: 8, fontSize: cowork ? 14.5 : 13, cursor: 'pointer',
-                  ...(on ? { background: ACCENT_SOFT, color: 'var(--accent-strong)', fontWeight: 500 } : { color: 'var(--text-secondary)' }),
-                }}
-              >
-                {f.star
-                  ? <span style={{ color: '#d6a419', fontSize: 12, width: 8, display: 'flex', justifyContent: 'center' }}>★</span>
-                  : cowork
-                    ? <span style={{ width: 8, flex: 'none', fontSize: 11, color: 'var(--text-faintest)' }}>○</span>
-                    : <span style={{ width: 8, height: 8, borderRadius: 2, flex: 'none', background: f.color, display: 'block' }} />}
-                <span style={{ flex: 1 }}>{f.label}</span>
-                <span style={{ fontSize: 11, color: on ? 'var(--accent-strong)' : 'var(--text-faintest)' }}>{f.count}</span>
-              </div>
-            );
-          })}
           {state.customFilters.map((cf) => {
             const key = 'custom:' + cf.id;
             const on = state.filter === key;
@@ -592,7 +576,8 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             );
           })}
         </div>
-  
+        )}
+
         <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:pinned')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{pinnedExpanded ? '▾' : '▸'}</span>
@@ -615,43 +600,6 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
           </div>
         )}
   
-        <div style={{ ...sectionLabelStyle(cowork), cursor: 'default' }}>
-          <span>{cowork ? 'Folders' : 'FOLDERS'}</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <span
-              onClick={() => {
-                const name = window.prompt('Folder name:');
-                if (name) vm.createFolder(name);
-              }}
-              title="New folder"
-              style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 13 }}
-            >
-              +
-            </span>
-            <span
-              onClick={() => vm.collapseAllFolders()}
-              title="Collapse all folders"
-              style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 12 }}
-            >
-              ⊟
-            </span>
-            <span
-              onClick={() => vm.refreshVault()}
-              title={vm.isTauri ? 'Refresh from disk' : 'Refresh'}
-              style={{ cursor: 'pointer', color: 'var(--text-faintest)', fontSize: 12 }}
-            >
-              ↻
-            </span>
-          </div>
-        </div>
-        {folderTree.map((node) => (
-          <FolderRow
-            key={node.path} vm={vm} node={node} depth={0} cowork={cowork}
-            dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone}
-            folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver}
-          />
-        ))}
-  
         <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:recent')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{recentExpanded ? '▾' : '▸'}</span>
@@ -665,7 +613,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             ))}
           </div>
         )}
-  
+
         <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:created')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{createdExpanded ? '▾' : '▸'}</span>
@@ -679,7 +627,50 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             ))}
           </div>
         )}
-  
+
+        <div style={{ ...sectionLabelStyle(cowork), cursor: 'default' }}>
+          <span>{cowork ? 'Folders' : 'FOLDERS'}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <span
+              onClick={() => {
+                const name = window.prompt('Folder name:');
+                if (name) vm.createFolder(name);
+              }}
+              title="New folder"
+              style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 13, padding: '1px 3px', borderRadius: 4 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              +
+            </span>
+            <span
+              onClick={() => vm.collapseAllFolders()}
+              title="Collapse all folders"
+              style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: '1px 3px', borderRadius: 4 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              ⊟
+            </span>
+            <span
+              onClick={() => vm.refreshVault()}
+              title={vm.isTauri ? 'Refresh from disk' : 'Refresh'}
+              style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, padding: '1px 3px', borderRadius: 4 }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
+            >
+              ↻
+            </span>
+          </div>
+        </div>
+        {folderTree.map((node) => (
+          <FolderRow
+            key={node.path} vm={vm} node={node} depth={0} cowork={cowork}
+            dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone}
+            folderDragOver={folderDragOver} setFolderDragOver={setFolderDragOver}
+          />
+        ))}
+
         <div style={sectionLabelStyle(cowork)} onClick={() => vm.toggleExpand('section:tags')}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ color: 'var(--text-faintest)', fontSize: 9 }}>{tagsExpanded ? '▾' : '▸'}</span>

@@ -1,17 +1,52 @@
 import type { NotesAppVM } from '../hooks/useNotesApp';
+import type { HtmlWidth } from '../types';
+import { WIDTHS } from './PreviewPane';
 
 const sectionLabel = { font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em', marginBottom: 12 } as const;
 
 export default function ContextRail({ vm }: { vm: NotesAppVM }) {
   const {
-    outline, backlinks, unlinked, active, childrenOf, frontMatter,
+    outline, backlinks, unlinked, active, childrenOf, frontMatter, isHtml, sourceValue, state, setState,
   } = vm;
   const subPages = active ? childrenOf(active.id) : [];
   const extraEntries = Object.entries(frontMatter.extra);
   const hasFrontMatter = !!(frontMatter.type || frontMatter.description || frontMatter.resource || frontMatter.timestamp || frontMatter.tags.length || extraEntries.length);
   const isWebResource = !!frontMatter.resource && /^https?:\/\//.test(frontMatter.resource);
+  const devBtn = (key: HtmlWidth, label: string) => (
+    <span
+      key={key}
+      onClick={() => setState({ htmlWidth: key })}
+      style={{
+        flex: 1, textAlign: 'center', padding: '4px 8px', borderRadius: 6, cursor: 'pointer', font: '500 11.5px -apple-system,system-ui',
+        color: state.htmlWidth === key ? 'var(--text-primary)' : 'var(--text-muted)',
+        background: state.htmlWidth === key ? 'var(--bg-surface)' : 'transparent',
+        boxShadow: state.htmlWidth === key ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
+      }}
+    >
+      {label}
+    </span>
+  );
   return (
     <div className="sc" style={{ width: 250, background: 'var(--bg-bar)', borderLeft: '1px solid var(--border)', overflow: 'auto', flex: 'none', padding: '22px 18px' }}>
+      {isHtml && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={sectionLabel}>PREVIEW</div>
+          <div style={{ display: 'flex', gap: 2, background: 'var(--bg-subtle)', borderRadius: 8, padding: 2, marginBottom: 10 }}>
+            {devBtn('desktop', 'Desktop')}
+            {devBtn('tablet', 'Tablet')}
+            {devBtn('mobile', 'Mobile')}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ font: '11px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>{WIDTHS[state.htmlWidth]}</span>
+            <span
+              onClick={() => vm.openInBrowser(sourceValue)}
+              style={{ font: '500 11.5px -apple-system,system-ui', color: 'oklch(0.5 0.12 var(--accent-hue))', cursor: 'pointer' }}
+            >
+              ↗ Open in browser
+            </span>
+          </div>
+        </div>
+      )}
       <div style={sectionLabel}>FRONTMATTER</div>
       {hasFrontMatter
         ? (

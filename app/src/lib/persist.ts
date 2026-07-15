@@ -6,6 +6,17 @@ import { DEFAULT_DAILY_TEMPLATE } from './utils';
 
 const STORAGE_KEY = 'notes-app:v1';
 
+// Seeded into a fresh vault's customFilters so the built-in "All Notes / Markdown / HTML /
+// Email Templates" views are ordinary smart filters — editable, deletable, reorderable like
+// any user-created one — instead of a separate hardcoded list. Fixed ids so code that needs
+// to recognize them (e.g. the "always show empty folders" case below) can do so reliably.
+export const DEFAULT_SMART_FILTERS: CustomFilter[] = [
+  { id: 'default-all', label: 'All Notes', color: '#8a8a93', match: 'all', rules: [] },
+  { id: 'default-markdown', label: 'Markdown', color: '#6c7686', match: 'all', rules: [{ field: 'type', value: 'md' }] },
+  { id: 'default-html', label: 'HTML', color: '#b5651d', match: 'all', rules: [{ field: 'type', value: 'html' }] },
+  { id: 'default-email', label: 'Email Templates', color: '#3a6ea5', match: 'all', rules: [{ field: 'type', value: 'eml' }] },
+];
+
 export type Design = 'default' | 'cowork' | 'cowork-plus' | 'midnight';
 
 export interface PersistedState {
@@ -52,18 +63,26 @@ export interface PersistedState {
   // OS-level accelerator string (Tauri format, e.g. "CommandOrControl+Shift+J") for the
   // global quick-capture popup (feature 9) — desktop-only, ignored in the browser preview.
   dailyGlobalShortcut: string;
+  // One-time migration marker: true once DEFAULT_SMART_FILTERS has been merged into an
+  // existing vault's customFilters (see loadPersistedState). Without this, a vault saved
+  // before the built-ins became ordinary CustomFilter records would load with an empty (or
+  // built-in-less) customFilters array and silently lose the "All Notes / Markdown / HTML /
+  // Email Templates" filters that used to be hardcoded. Gating on this flag makes the merge
+  // run exactly once, so intentionally deleting a built-in filter later doesn't un-delete it
+  // on the next load.
+  builtinFiltersSeeded: boolean;
 }
 
 export function defaultPersistedState(): PersistedState {
   return {
     collapsed: false,
     railHidden: false,
-    defaultView: 'split',
+    defaultView: 'preview',
     viewByNote: {},
     activeId: 'api',
     secondaryId: null,
     openTabs: ['api', 'landing', 'q2'],
-    filter: 'all',
+    filter: 'custom:default-all',
     expandedDocs: { api: true, roadmap: true },
     editedAt: seedEditedAt(),
     dynamicFiles: [],
@@ -81,13 +100,14 @@ export function defaultPersistedState(): PersistedState {
     noteOrder: seedFiles.map((f) => f.id),
     fileMoves: {},
     createdAt: {},
-    customFilters: [],
+    customFilters: [...DEFAULT_SMART_FILTERS],
     pinnedFolders: [],
     dailyFolder: 'Daily',
     dailyTemplate: DEFAULT_DAILY_TEMPLATE,
     dailyPrompts: [],
     dailyCarryOverTasks: false,
     dailyGlobalShortcut: 'CommandOrControl+Shift+J',
+    builtinFiltersSeeded: true,
   };
 }
 
@@ -111,7 +131,19 @@ export function loadPersistedState(): PersistedState {
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
     if (!looksValid(parsed)) return fallback;
-    return { ...fallback, ...parsed };
+    const merged = { ...fallback, ...parsed };
+    // Existing vault saved before the built-in filters became CustomFilter records: merge
+    // in whichever defaults aren't already present (by id), once. See builtinFiltersSeeded.
+    // Checked on the raw `parsed` blob, not `merged` — a blob that predates this field
+    // entirely is missing the key, and spreading `...parsed` over `fallback` (whose default
+    // is `true`) would silently leave `merged.builtinFiltersSeeded` true and skip this.
+    if (!parsed.builtinFiltersSeeded) {
+      const present = new Set(merged.customFilters.map((c) => c.id));
+      const missing = DEFAULT_SMART_FILTERS.filter((d) => !present.has(d.id));
+      merged.customFilters = [...missing, ...merged.customFilters];
+      merged.builtinFiltersSeeded = true;
+    }
+    return merged;
   } catch {
     return fallback;
   }

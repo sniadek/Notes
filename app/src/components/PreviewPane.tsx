@@ -6,7 +6,7 @@ import { FONT_SCALES } from '../lib/utils';
 import { esc } from '../lib/markdown';
 import { assetUrl } from '../lib/tauriFs';
 
-const WIDTHS: Record<HtmlWidth, string> = { desktop: '100%', tablet: '768px', mobile: '390px' };
+export const WIDTHS: Record<HtmlWidth, string> = { desktop: '100%', tablet: '768px', mobile: '390px' };
 
 export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; pane?: 'primary' | 'secondary' }) {
   const { state, setState } = vm;
@@ -219,20 +219,25 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
     return (
       <div className="sc" style={paneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg-bar)', flex: 'none' }}>
-            <div style={{ display: 'flex', gap: 2, background: 'var(--bg-subtle)', borderRadius: 8, padding: 2 }}>
-              {devBtn('desktop', 'Desktop')}
-              {devBtn('tablet', 'Tablet')}
-              {devBtn('mobile', 'Mobile')}
+          {/* Primary pane's Desktop/Tablet/Mobile + Open in browser controls live in the
+             right rail (ContextRail) instead — the secondary (split) pane has no rail
+             equivalent, so it keeps its own copy here. */}
+          {secondary && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--bg-bar)', flex: 'none' }}>
+              <div style={{ display: 'flex', gap: 2, background: 'var(--bg-subtle)', borderRadius: 8, padding: 2 }}>
+                {devBtn('desktop', 'Desktop')}
+                {devBtn('tablet', 'Tablet')}
+                {devBtn('mobile', 'Mobile')}
+              </div>
+              <span style={{ marginLeft: 'auto', font: '11px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>{WIDTHS[state.htmlWidth]}</span>
+              <span
+                onClick={() => vm.openInBrowser(sourceValue)}
+                style={{ font: '500 11.5px -apple-system,system-ui', color: 'oklch(0.5 0.12 var(--accent-hue))', cursor: 'pointer' }}
+              >
+                ↗ Open in browser
+              </span>
             </div>
-            <span style={{ marginLeft: 'auto', font: '11px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>{WIDTHS[state.htmlWidth]}</span>
-            <span
-              onClick={() => vm.openInBrowser(sourceValue)}
-              style={{ font: '500 11.5px -apple-system,system-ui', color: 'oklch(0.5 0.12 var(--accent-hue))', cursor: 'pointer' }}
-            >
-              ↗ Open in browser
-            </span>
-          </div>
+          )}
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', overflow: 'auto', padding: 16, background: 'var(--bg-canvas)', minHeight: 0 }}>
             <iframe
               key={file?.id}

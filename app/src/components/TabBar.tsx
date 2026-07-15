@@ -200,7 +200,16 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
         onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-tertiary)'; }}
       >
         <span>▾</span>
-        <span style={{ font: '600 11px ui-monospace,Menlo,monospace', minWidth: 12, textAlign: 'center' }}>{state.openTabs.length}</span>
+        <span
+          style={{
+            font: '600 11px ui-monospace,Menlo,monospace', minWidth: 12, textAlign: 'center',
+            ...(state.openTabs.length > 10
+              ? { color: 'var(--accent-strong)', background: 'var(--accent-soft)', borderRadius: 8, padding: '1px 5px' }
+              : {}),
+          }}
+        >
+          {state.openTabs.length}
+        </span>
       </div>
       <div
         onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}

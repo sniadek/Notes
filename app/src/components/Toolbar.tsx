@@ -57,21 +57,6 @@ function isTauri(): boolean {
   return '__TAURI_INTERNALS__' in window;
 }
 
-const TRACKER_URL = 'http://localhost:8080';
-
-async function openTracker() {
-  try {
-    if (isTauri()) {
-      const { openUrl } = await import('@tauri-apps/plugin-opener');
-      await openUrl(TRACKER_URL);
-    } else {
-      window.open(TRACKER_URL, '_blank');
-    }
-  } catch (err) {
-    console.error('Failed to open task tracker:', err);
-  }
-}
-
 async function windowControl(action: 'close' | 'minimize' | 'toggleMaximize') {
   if (!isTauri()) return;
   const { getCurrentWindow } = await import('@tauri-apps/api/window');
@@ -172,8 +157,6 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
           ))}
         </div>
         )}
-        <IconBtn title="Add task (⌘⇧N)" onClick={vm.openAddTask} style={{ fontSize: 15 }}>☑</IconBtn>
-        <IconBtn title="Open task tracker" onClick={openTracker} style={{ fontSize: 15 }}>⧉</IconBtn>
         <IconBtn title="Graph view (⌘G)" onClick={() => setState({ graphOpen: true })}>⬡</IconBtn>
         <IconBtn
           title="Toggle right sidebar (⌘⇧\)"

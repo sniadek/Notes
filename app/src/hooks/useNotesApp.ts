@@ -12,7 +12,7 @@ import {
 import type { FrontMatter } from '../lib/markdown';
 import {
   agoLabel, appendUnderSection, dailyTitle, download, escapeRegExp, isoWeekLabel, isoWeekMonday, linesInSection,
-  linkifyMentions, nowStamp, openInBrowser, renderDailyTemplate, routeDailyCapture, shiftISO,
+  linkifyMentions, nowStamp, openInBrowser as openInBrowserWeb, renderDailyTemplate, routeDailyCapture, shiftISO,
 } from '../lib/utils';
 import {
   copyFile as tauriCopyFile, createFile as tauriCreateFile, deleteFile as tauriDeleteFile, isTauri,
@@ -285,6 +285,7 @@ export function useNotesApp(showRightSidebar = true) {
         createdAt: state.createdAt, customFilters: state.customFilters, pinnedFolders: state.pinnedFolders,
         dailyFolder: state.dailyFolder, dailyTemplate: state.dailyTemplate,
         dailyPrompts: state.dailyPrompts, dailyCarryOverTasks: state.dailyCarryOverTasks, dailyGlobalShortcut: state.dailyGlobalShortcut,
+        builtinFiltersSeeded: state.builtinFiltersSeeded,
       };
       const ok = savePersistedState(p);
       if (!ok !== stateRef.current.persistError) setState({ persistError: !ok });
@@ -1184,6 +1185,26 @@ export function useNotesApp(showRightSidebar = true) {
       download(a.file, stateRef.current.sources[a.id] || '', 'text/plain');
     }
   }, [fileOf]);
+
+  // window.open() is a no-op in the Tauri webview (no popup surface to open into), so the
+  // web fallback silently does nothing there. In Tauri, write the HTML to a scratch file
+  // inside the vault root — the only path writeFile is allowed to touch — and hand it to
+  // the OS's default browser via the opener plugin instead.
+  const openInBrowser = useCallback(async (html: string) => {
+    const root = stateRef.current.vaultRoot;
+    if (isTauri() && root) {
+      try {
+        const path = root + '/.preview-open.html';
+        await writeFile(path, html);
+        const { openPath } = await import('@tauri-apps/plugin-opener');
+        await openPath(path);
+      } catch (err) {
+        console.error('Failed to open preview in browser:', err);
+      }
+      return;
+    }
+    openInBrowserWeb(html);
+  }, []);
 
   const exportDoc = useCallback((targetId?: string | null) => {
     const a = fileOf(targetId ?? stateRef.current.activeId);
@@ -2089,11 +2110,16 @@ export function useNotesApp(showRightSidebar = true) {
       children: build(path),
     }));
     const hasVisibleContent = (node: FolderNode): boolean => node.roots.length > 0 || node.children.some(hasVisibleContent);
+    // A rule-less filter (the literal 'all' key, or a zero-rule custom filter like the
+    // built-in "All Notes" smart filter) matches every file, so keep showing empty folders
+    // too — otherwise browsing "All Notes" would still hide folders with nothing in them.
+    const activeCf = state.filter.startsWith('custom:') ? state.customFilters.find((c) => c.id === state.filter.slice(7)) : undefined;
+    const showsEverything = state.filter === 'all' || (!!activeCf && activeCf.rules.length === 0);
     const pruneEmpty = (nodes: FolderNode[]): FolderNode[] => nodes
-      .filter((n) => state.filter === 'all' || hasVisibleContent(n))
+      .filter((n) => showsEverything || hasVisibleContent(n))
       .map((n) => ({ ...n, children: pruneEmpty(n.children) }));
     return pruneEmpty(build(undefined));
-  }, [all, pred, state.folderOrder, orderIdx, state.filter]);
+  }, [all, pred, state.folderOrder, orderIdx, state.filter, state.customFilters]);
 
   // breadcrumb
   const pathSegments = useMemo(() => {

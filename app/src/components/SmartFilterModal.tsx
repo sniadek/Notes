@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import type { NotesAppVM } from '../hooks/useNotesApp';
 import type { FilterField, FilterRule } from '../types';
 
@@ -46,6 +46,18 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
   const [color, setColor] = useState(editing?.color || COLORS[0]);
   const [match, setMatch] = useState<'all' | 'any'>(editing?.match || 'all');
   const [rules, setRules] = useState<FilterRule[]>(editing?.rules?.length ? editing.rules : [{ field: 'type', value: 'md' }]);
+
+  // This modal stays mounted for the app's lifetime (App.tsx renders it unconditionally and
+  // it just returns null while closed), so the useState initializers above only ever run once,
+  // on that first mount — reopening for a different filter (or from closed to new) wouldn't
+  // otherwise refresh these fields. Reset explicitly whenever the modal transitions to open.
+  useEffect(() => {
+    if (!state.smartFilterModalOpen) return;
+    setLabel(editing?.label || '');
+    setColor(editing?.color || COLORS[0]);
+    setMatch(editing?.match || 'all');
+    setRules(editing?.rules?.length ? editing.rules : [{ field: 'type', value: 'md' }]);
+  }, [state.smartFilterModalOpen, state.editingFilterId]);
 
   if (!state.smartFilterModalOpen) return null;
 
