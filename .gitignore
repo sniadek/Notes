@@ -1,2 +1,18 @@
 .claude/
 .DS_Store
+
+# Node
+node_modules/
+
+# Playwright results
+allure-results/
+allure-report/
+test-results/
+
+# Playwright snapshots and screenshots
+tests/snapshots/
+tests/*.png
+
+# Local env files
+.env
+.env.local
