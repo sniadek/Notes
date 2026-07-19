@@ -31,7 +31,7 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
 
   if (isEml) {
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         <div style={{ padding: '22px 24px', maxWidth: 680 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div style={{ font: '600 13px -apple-system,system-ui', color: 'var(--text-primary)' }}>Email Template</div>
@@ -76,7 +76,7 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
 
   if (isMd || isHtml) {
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         <textarea
           aria-label="Note source editor"
           value={sourceValue}

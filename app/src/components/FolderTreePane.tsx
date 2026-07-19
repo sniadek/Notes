@@ -53,7 +53,7 @@ export default function FolderTreePane({ vm }: { vm: NotesAppVM }) {
           );
         })}
       </div>
-      <div className="sc" style={{ flex: 1, overflow: 'auto', minHeight: 0, padding: '14px 10px' }}>
+      <div className="sc" tabIndex={0} style={{ flex: 1, overflow: 'auto', minHeight: 0, padding: '14px 10px' }}>
         {node.roots.map((f) => (
           <FileRow key={f.id} vm={vm} file={f} depth={0} dragOverId={dragOverId} dragZone={dragZone} setDragOverId={setDragOverId} setDragZone={setDragZone} />
         ))}

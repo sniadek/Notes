@@ -107,7 +107,7 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
   const showViewToggle = focusedFile?.type !== 'pdf' && focusedFile?.type !== 'image';
 
   return (
-    <div data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: 'var(--bg-bar)', borderBottom: '1px solid var(--border)', flex: 'none', padding: '0 16px', gap: 14 }}>
+    <header data-tauri-drag-region style={{ display: 'flex', alignItems: 'center', height: 52, background: 'var(--bg-bar)', borderBottom: '1px solid var(--border)', flex: 'none', padding: '0 16px', gap: 14 }}>
       <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
         <span onClick={() => windowControl('close')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#ff5f57', cursor: 'pointer' }} />
         <span onClick={() => windowControl('minimize')} style={{ width: 12, height: 12, borderRadius: '50%', background: '#febc2e', cursor: 'pointer' }} />
@@ -170,6 +170,6 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
         </IconBtn>
         <IconBtn title="Settings" onClick={() => setState({ settingsOpen: true })}>⚙</IconBtn>
       </div>
-    </div>
+    </header>
   );
 }

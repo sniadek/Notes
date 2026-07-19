@@ -17,11 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      # The app's own a11y debt (color contrast, landmarks, focusable scroll regions — see
-      # tracked follow-up) means the real app currently fails Axe. Non-blocking by default on
-      # push/PR so CI reports violations without gating every PR on pre-existing issues; a
-      # manual workflow_dispatch run can still force it strict via the fail_on_a11y input.
-      FAIL_ON_A11Y: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.fail_on_a11y || 'true') || 'false' }}
+      # Strict by default on every run. The app's a11y debt (color contrast, missing
+      # landmarks, non-focusable scroll regions) has been fixed and verified at 0 Axe
+      # violations across all 4 design themes; a workflow_dispatch run can still relax this
+      # via the fail_on_a11y input if a future regression needs triaging non-blocking.
+      FAIL_ON_A11Y: ${{ github.event.inputs.fail_on_a11y || 'true' }}
 
     steps:
       - name: Checkout

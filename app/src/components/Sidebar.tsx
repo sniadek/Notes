@@ -232,7 +232,7 @@ export function FileRow({ vm, file, depth, dragOverId, dragZone, setDragOverId, 
           {isDynamic && (
             <div
               onClick={(e) => { e.stopPropagation(); vm.deleteFile(file.id); setMenuOpen(false); }}
-              style={{ ...menuItemStyle, color: '#c0524a', borderTop: '1px solid var(--border)' }}
+              style={{ ...menuItemStyle, color: 'var(--status-danger)', borderTop: '1px solid var(--border)' }}
               onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
@@ -405,7 +405,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
 
   if (state.collapsed) {
     return (
-      <div style={{ width: 52, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: 4 }}>
+      <nav aria-label="Notes" style={{ width: 52, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0', gap: 4 }}>
         <div
           onClick={vm.openTaskManager}
           title="Tasks"
@@ -439,15 +439,15 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             </div>
           );
         })}
-      </div>
+      </nav>
     );
   }
 
   const showSyncCountdown = vm.isTauri && !!state.vaultRoot && !!state.lastSyncedAt;
 
   return (
-    <div style={{ width: 248, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', flex: 'none', display: 'flex', flexDirection: 'column' }}>
-      <div className="sc" style={{ overflow: 'auto', flex: 1, minHeight: 0, padding: '14px 10px' }}>
+    <nav aria-label="Notes" style={{ width: 248, background: 'var(--bg-bar)', borderRight: '1px solid var(--border)', flex: 'none', display: 'flex', flexDirection: 'column' }}>
+      <div className="sc" tabIndex={0} style={{ overflow: 'auto', flex: 1, minHeight: 0, padding: '14px 10px' }}>
         {cowork && (
           <div
             onClick={() => vm.newFile('Notes')}
@@ -474,7 +474,7 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
           <span style={{ width: 8, flex: 'none', fontSize: 12, display: 'flex', justifyContent: 'center' }}>☑</span>
           <span style={{ flex: 1 }}>Tasks</span>
           {vm.taskCounts > 0 && (
-            <span style={{ font: '600 10.5px -apple-system,system-ui', color: '#fff', background: '#c0524a', padding: '1px 6px', borderRadius: 9, flex: 'none' }}>
+            <span style={{ font: '600 10.5px -apple-system,system-ui', color: '#fff', background: 'var(--status-danger-bg)', padding: '1px 6px', borderRadius: 9, flex: 'none' }}>
               {vm.taskCounts}
             </span>
           )}
@@ -703,19 +703,19 @@ export default function Sidebar({ vm }: { vm: NotesAppVM }) {
             title={state.persistError
               ? 'Saving app state to localStorage failed (storage quota?) — recent changes may not survive a restart.'
               : 'Writing a note to disk failed — its latest text is only in memory.'}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: '#b5453f' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: 'var(--status-danger)' }}
           >
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#c0524a' }} />
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-danger)' }} />
             Save failed
           </div>
         )
         : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: '#1a8a4f' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#28b463' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 26, flex: 'none', background: 'var(--bg-bar)', borderTop: '1px solid var(--border)', padding: '0 18px', font: '11px ui-monospace,Menlo,monospace', color: 'var(--status-success)' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-success)' }} />
             Synced
             {showSyncCountdown && <SyncCountdown lastSyncedAt={state.lastSyncedAt!} />}
           </div>
         )}
-    </div>
+    </nav>
   );
 }

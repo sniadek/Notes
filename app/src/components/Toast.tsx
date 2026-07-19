@@ -8,7 +8,7 @@ export default function Toast({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div style={{ position: 'fixed', bottom: 26, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 60, pointerEvents: 'none' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--text-primary)', color: 'var(--bg-surface)', padding: '9px 10px 9px 15px', borderRadius: 10, boxShadow: '0 10px 30px -8px rgba(0,0,0,.4)', font: '13px -apple-system,system-ui', pointerEvents: 'auto', animation: 'pop .14s ease' }}>
+      <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 14, background: 'var(--text-primary)', color: 'var(--bg-surface)', padding: '9px 10px 9px 15px', borderRadius: 10, boxShadow: '0 10px 30px -8px rgba(0,0,0,.4)', font: '13px -apple-system,system-ui', pointerEvents: 'auto', animation: 'pop .14s ease' }}>
         <span>{state.toast.message}</span>
         <span
           onClick={undoLastCapture}

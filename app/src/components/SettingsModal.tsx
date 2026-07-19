@@ -51,7 +51,7 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid var(--border)', overflow: 'hidden', animation: 'pop .14s ease' }}>
+      <div role="dialog" aria-modal="true" aria-label="Settings" onClick={(e) => e.stopPropagation()} style={{ width: 600, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid var(--border)', overflow: 'hidden', animation: 'pop .14s ease' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ font: '600 16px -apple-system,system-ui', color: 'var(--text-primary)' }}>Settings</div>
           <div
@@ -63,7 +63,7 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
             ×
           </div>
         </div>
-        <div className="sc" style={{ padding: '8px 22px 22px', maxHeight: '62vh', overflow: 'auto' }}>
+        <div className="sc" tabIndex={0} style={{ padding: '8px 22px 22px', maxHeight: '62vh', overflow: 'auto' }}>
           <div style={{ font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.05em', padding: '18px 0 10px' }}>APPEARANCE</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
             <span style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Design</span>

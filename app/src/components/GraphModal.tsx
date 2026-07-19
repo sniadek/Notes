@@ -11,7 +11,7 @@ export default function GraphModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 740, maxWidth: '94vw', height: 520, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease', display: 'flex', flexDirection: 'column' }}>
+      <div role="dialog" aria-modal="true" aria-label="Graph view" onClick={(e) => e.stopPropagation()} style={{ width: 740, maxWidth: '94vw', height: 520, maxHeight: '88vh', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ font: '600 15px -apple-system,system-ui', color: 'var(--text-primary)' }}>
             Graph view <span style={{ color: 'var(--text-faintest)', fontWeight: 400 }}>· notes linked by [[wiki-links]]</span>

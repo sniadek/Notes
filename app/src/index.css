@@ -11,10 +11,13 @@ html, html[data-design="default"] {
   --hover: rgba(0, 0, 0, .08);
   --text-primary: #26241f;
   --text-secondary: #403d37;
-  --text-muted: #8a8a8f;
-  --text-tertiary: #a8a29a;
-  --text-faint: #b5b0a6;
-  --text-faintest: #bdb8af;
+  /* text-muted/tertiary/faint/faintest are tuned to hold >=4.5:1 (WCAG AA, normal text)
+     against --bg-canvas, the darkest background any of these tiers appears on — the
+     narrower gap between them (vs. the original wider fade) is the direct cost of that. */
+  --text-muted: #626266;
+  --text-tertiary: #6b645c;
+  --text-faint: #6e675b;
+  --text-faintest: #70695c;
   --border: rgba(0, 0, 0, .07);
   --border-soft: rgba(0, 0, 0, .05);
   --accent-hue: 264;
@@ -29,6 +32,23 @@ html, html[data-design="default"] {
   --font-ui: -apple-system, "SF Pro Text", system-ui, sans-serif;
   --font-mono: ui-monospace, Menlo, monospace;
   --font-serif: var(--font-ui);
+  /* Status/badge colors below are tuned per theme the same way as the text-* tiers above:
+     >=4.5:1 (WCAG AA) against the worst-case background they render on in that theme
+     (accent-soft-tinted selected rows for badges, bg-canvas/bg-subtle for status text). */
+  --on-accent: #fff;
+  --status-success: #167744;
+  --status-danger: #bd382a;
+  /* Fixed (non-theme-adaptive) because these are solid, opaque backgrounds — unlike the
+     translucent badge tints below, they don't need to stay legible against a themed
+     surface, only against the white text painted on top of them in every theme. */
+  --status-danger-bg: #bd382a;
+  --disabled-bg: #6b6b6b;
+  --badge-md-fg: #575f6c; --badge-md-bg: rgba(87, 95, 108, .14);
+  --badge-html-fg: #8d4e17; --badge-html-bg: rgba(141, 78, 23, .14);
+  --badge-eml-fg: #336191; --badge-eml-bg: rgba(51, 97, 145, .14);
+  --badge-pdf-fg: #a83429; --badge-pdf-bg: rgba(168, 52, 41, .14);
+  --badge-image-fg: #276a4d; --badge-image-bg: rgba(39, 106, 77, .14);
+  --syntax-keyword: #8a4ec0;
 }
 
 html[data-design="cowork"], html[data-design="cowork-plus"] {
@@ -41,10 +61,11 @@ html[data-design="cowork"], html[data-design="cowork-plus"] {
   --hover: rgba(61, 41, 20, .08);
   --text-primary: #2d2a26;
   --text-secondary: #3d3929;
-  --text-muted: #8e8c87;
-  --text-tertiary: #8e8c87;
-  --text-faint: #a8a29a;
-  --text-faintest: #c2bcb2;
+  /* see default theme above for why these are tighter than the original fade. */
+  --text-muted: #64625e;
+  --text-tertiary: #676561;
+  --text-faint: #6e675e;
+  --text-faintest: #71685a;
   --border: rgba(61, 41, 20, .1);
   --border-soft: rgba(61, 41, 20, .06);
   --accent-hue: 38;
@@ -57,6 +78,15 @@ html[data-design="cowork"], html[data-design="cowork-plus"] {
   --shadow-modal: 0 30px 90px -20px rgba(61, 41, 20, .28);
   --font-serif: "Source Serif 4", Georgia, serif;
   --dot-grid: radial-gradient(circle, rgba(61, 41, 20, .1) 1px, transparent 1px);
+  --on-accent: #fff;
+  --status-success: #167744;
+  --status-danger: #bd382a;
+  --badge-md-fg: #555d6a; --badge-md-bg: rgba(85, 93, 106, .14);
+  --badge-html-fg: #8a4d16; --badge-html-bg: rgba(138, 77, 22, .14);
+  --badge-eml-fg: #325f8e; --badge-eml-bg: rgba(50, 95, 142, .14);
+  --badge-pdf-fg: #a43328; --badge-pdf-bg: rgba(164, 51, 40, .14);
+  --badge-image-fg: #26674b; --badge-image-bg: rgba(38, 103, 75, .14);
+  --syntax-keyword: #884cbf;
 }
 
 html[data-design="midnight"] {
@@ -71,8 +101,9 @@ html[data-design="midnight"] {
   --text-secondary: #c9c9c9;
   --text-muted: #8a8a8a;
   --text-tertiary: #8a8a8a;
-  --text-faint: #6d6d6d;
-  --text-faintest: #6d6d6d;
+  /* faint/faintest lightened from #6d6d6d — see default theme above for rationale. */
+  --text-faint: #878787;
+  --text-faintest: #868686;
   --border: rgba(255, 255, 255, .09);
   --border-soft: rgba(255, 255, 255, .05);
   --accent-hue: 40;
@@ -87,6 +118,17 @@ html[data-design="midnight"] {
   --font-ui: -apple-system, "SF Pro Text", system-ui, sans-serif;
   --font-mono: ui-monospace, Menlo, monospace;
   --font-serif: var(--font-ui);
+  /* --on-accent is dark here (not white) because midnight's --accent is a light 0.68L
+     swatch, unlike the ~0.5L accent in the other themes — white text on it fails AA. */
+  --on-accent: var(--bg-app);
+  --status-success: #1d9b59;
+  --status-danger: #d96356;
+  --badge-md-fg: #a9afba; --badge-md-bg: rgba(169, 175, 186, .14);
+  --badge-html-fg: #e6a264; --badge-html-bg: rgba(230, 162, 100, .14);
+  --badge-eml-fg: #8db1d7; --badge-eml-bg: rgba(141, 177, 215, .14);
+  --badge-pdf-fg: #e59e97; --badge-pdf-bg: rgba(229, 158, 151, .14);
+  --badge-image-fg: #51bf90; --badge-image-bg: rgba(81, 191, 144, .14);
+  --syntax-keyword: #a273cd;
 }
 
 body {

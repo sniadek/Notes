@@ -57,7 +57,7 @@ export default function DailyCaptureModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={closeDailyCapture} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '16vh', zIndex: 51, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
+      <div role="dialog" aria-modal="true" aria-label="Daily capture" onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
           <CalendarIcon />
           <span style={{ font: '600 13.5px -apple-system,system-ui', color: 'var(--text-primary)' }}>Add to Daily Note</span>

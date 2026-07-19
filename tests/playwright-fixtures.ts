@@ -40,13 +40,23 @@ async function runAxeOnPage(page: any, testInfo: any) {
 
 // Set up per-test listeners: run Axe immediately and on every navigation
 test.beforeEach(async ({ page }, testInfo) => {
-  // Run for the initial loaded content
-  await runAxeOnPage(page, testInfo);
+  // Run for the initial loaded content — skipped on about:blank (the page fixture's default
+  // state before any test navigates), since axe flags a blank document as missing a title,
+  // lang attribute, main landmark, and heading regardless of what the app under test does.
+  // Real coverage of the first real page comes from the framenavigated listener below.
+  if (page.url() !== 'about:blank') {
+    await runAxeOnPage(page, testInfo);
+  }
 
-  // Listener for subsequent navigations (main frame)
+  // Listener for subsequent navigations (main frame). 'framenavigated' fires on commit, before
+  // an SPA's JS has mounted/painted anything — running Axe synchronously here raced React's
+  // first render and intermittently flagged a still-empty document (missing <main>, no
+  // heading yet). Wait for the network to go idle first so Axe sees the settled app, not a
+  // transitional shell.
   const listener = async (frame: any) => {
     try {
       if (frame === page.mainFrame()) {
+        await page.waitForLoadState('networkidle').catch(() => {});
         await runAxeOnPage(page, testInfo);
       }
     } catch (err) {

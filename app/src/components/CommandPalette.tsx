@@ -27,7 +27,7 @@ export default function CommandPalette({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '13vh', zIndex: 50, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 560, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: cowork ? 24 : 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
+      <div role="dialog" aria-modal="true" aria-label="Command palette" onClick={(e) => e.stopPropagation()} style={{ width: 560, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: cowork ? 24 : 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
         <div style={{ padding: cowork ? '14px 14px 10px' : 0 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 11, padding: '15px 18px',
@@ -48,7 +48,7 @@ export default function CommandPalette({ vm }: { vm: NotesAppVM }) {
             <span style={{ font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)', background: 'var(--bg-subtle)', padding: '3px 7px', borderRadius: 5 }}>ESC</span>
           </div>
         </div>
-        <div className="sc" style={{ maxHeight: 340, overflow: 'auto', padding: 7 }}>
+        <div className="sc" tabIndex={0} style={{ maxHeight: 340, overflow: 'auto', padding: 7 }}>
           {paletteResults.map((r, i) => (
             <div
               key={r.kind + r.id}

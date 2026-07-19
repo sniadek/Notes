@@ -27,7 +27,7 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
     </span>
   );
   return (
-    <div className="sc" style={{ width: 250, background: 'var(--bg-bar)', borderLeft: '1px solid var(--border)', overflow: 'auto', flex: 'none', padding: '22px 18px' }}>
+    <aside aria-label="Context" className="sc" tabIndex={0} style={{ width: 250, background: 'var(--bg-bar)', borderLeft: '1px solid var(--border)', overflow: 'auto', flex: 'none', padding: '22px 18px' }}>
       {isHtml && (
         <div style={{ marginBottom: 28 }}>
           <div style={sectionLabel}>PREVIEW</div>
@@ -79,7 +79,7 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
             ))}
           </div>
         )
-        : <div style={{ font: '400 12px -apple-system,system-ui', color: '#c4c0b6', marginBottom: 28 }}>No frontmatter</div>}
+        : <div style={{ font: '400 12px -apple-system,system-ui', color: 'var(--text-faintest)', marginBottom: 28 }}>No frontmatter</div>}
 
       {subPages.length > 0 && (
         <>
@@ -119,7 +119,7 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
             ))}
           </div>
         )
-        : <div style={{ font: '400 12px -apple-system,system-ui', color: '#c4c0b6', marginBottom: 28 }}>No headings</div>}
+        : <div style={{ font: '400 12px -apple-system,system-ui', color: 'var(--text-faintest)', marginBottom: 28 }}>No headings</div>}
 
       <div style={sectionLabel}>BACKLINKS · {backlinks.length}</div>
       {backlinks.length > 0
@@ -139,7 +139,7 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
             ))}
           </div>
         )
-        : <div style={{ font: '400 12px -apple-system,system-ui', color: '#c4c0b6' }}>No backlinks yet</div>}
+        : <div style={{ font: '400 12px -apple-system,system-ui', color: 'var(--text-faintest)' }}>No backlinks yet</div>}
 
       {unlinked.length > 0 && (
         <>
@@ -160,6 +160,6 @@ export default function ContextRail({ vm }: { vm: NotesAppVM }) {
           </div>
         </>
       )}
-    </div>
+    </aside>
   );
 }

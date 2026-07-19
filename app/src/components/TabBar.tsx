@@ -77,7 +77,7 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'stretch', height: 40, background: 'var(--bg-tab)', borderBottom: '1px solid var(--border)', flex: 'none' }}>
-    <div className="sc" style={{ display: 'flex', alignItems: 'stretch', flex: '1 1 auto', overflowX: 'auto', minWidth: 0 }}>
+    <div className="sc" tabIndex={0} style={{ display: 'flex', alignItems: 'stretch', flex: '1 1 auto', overflowX: 'auto', minWidth: 0 }}>
       {state.openTabs.map((id, i) => {
         const f = fileOf(id);
         if (!f) return null;
@@ -345,7 +345,7 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
                 }}
               />
             </div>
-            <div className="sc" style={{ overflow: 'auto', padding: '0 5px 5px' }}>
+            <div className="sc" tabIndex={0} style={{ overflow: 'auto', padding: '0 5px 5px' }}>
               {tabListResults.length === 0 && (
                 <div style={{ padding: '6px 9px 8px', font: '12.5px -apple-system,system-ui', color: 'var(--text-faintest)' }}>
                   {tq ? 'No matching tabs' : 'No open tabs'}

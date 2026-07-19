@@ -128,7 +128,7 @@ export default function TaskManagerPane({ vm }: { vm: NotesAppVM }) {
   };
 
   return (
-    <div className="sc" style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
+    <div className="sc" tabIndex={0} style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 18 }}>
         <span style={{ font: '600 22px -apple-system,system-ui', color: 'var(--text-primary)' }}>Tasks</span>
         <span style={{ font: '13px -apple-system,system-ui', color: 'var(--text-tertiary)' }}>
@@ -145,12 +145,14 @@ export default function TaskManagerPane({ vm }: { vm: NotesAppVM }) {
           style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', font: '13.5px -apple-system,system-ui', color: 'var(--text-primary)' }}
         />
         <input
+          aria-label="Due date"
           type="date"
           value={quickDue}
           onChange={(e) => setQuickDue(e.target.value)}
           style={{ font: '12px -apple-system,system-ui', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 6px', background: 'var(--bg-surface)' }}
         />
         <select
+          aria-label="Priority"
           value={quickPriority}
           onChange={(e) => setQuickPriority(e.target.value as TaskPriority | '')}
           style={{ font: '12px -apple-system,system-ui', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 6px', background: 'var(--bg-surface)' }}
@@ -160,7 +162,7 @@ export default function TaskManagerPane({ vm }: { vm: NotesAppVM }) {
           <option value="medium">Medium</option>
           <option value="high">High</option>
         </select>
-        <span onClick={submitQuick} style={{ font: '500 12px -apple-system,system-ui', color: '#fff', background: 'var(--accent)', padding: '6px 12px', borderRadius: 7, cursor: 'pointer' }}>Add</span>
+        <span onClick={submitQuick} style={{ font: '500 12px -apple-system,system-ui', color: 'var(--on-accent)', background: 'var(--accent)', padding: '6px 12px', borderRadius: 7, cursor: 'pointer' }}>Add</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>

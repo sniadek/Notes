@@ -24,7 +24,7 @@ export default function AddTaskModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={closeAddTask} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '16vh', zIndex: 51, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
+      <div role="dialog" aria-modal="true" aria-label="Add task" onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
           <span style={{ fontSize: 15 }}>☑</span>
           <span style={{ font: '600 13.5px -apple-system,system-ui', color: 'var(--text-primary)' }}>Add task</span>
@@ -44,6 +44,7 @@ export default function AddTaskModal({ vm }: { vm: NotesAppVM }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ font: '12.5px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Due</span>
               <input
+                aria-label="Due date"
                 type="date"
                 value={state.addTaskDue}
                 onChange={(e) => setState({ addTaskDue: e.target.value })}
@@ -72,6 +73,7 @@ export default function AddTaskModal({ vm }: { vm: NotesAppVM }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <span style={{ font: '12.5px -apple-system,system-ui', color: 'var(--text-secondary)' }}>Add to</span>
             <select
+              aria-label="Add to"
               value={state.addTaskTargetId ?? ''}
               onChange={(e) => setState({ addTaskTargetId: e.target.value || null })}
               style={{ flex: 1, font: '12.5px -apple-system,system-ui', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 6px', background: 'var(--bg-surface)', minWidth: 0 }}
