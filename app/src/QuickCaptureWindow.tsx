@@ -85,6 +85,7 @@ export default function QuickCaptureWindow() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: 12, gap: 8, background: 'var(--bg-surface)' }}>
       <textarea
+        aria-label="Quick capture"
         ref={inputRef}
         value={text}
         onChange={(e) => setText(e.target.value)}

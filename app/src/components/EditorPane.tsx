@@ -62,6 +62,7 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
             <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span style={labelStyle}>BODY · HTML</span>
               <textarea
+                aria-label="Email body"
                 value={emlData.body}
                 onChange={(e) => file && vm.setEml(file.id, 'body', e.target.value)}
                 style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '12px 13px', font: '12.5px/1.7 ui-monospace,Menlo,monospace', color: 'var(--text-secondary)', background: 'var(--bg-surface)', outline: 'none', resize: 'none', minHeight: 280 }}
@@ -77,6 +78,7 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
     return (
       <div className="sc" style={paneStyle}>
         <textarea
+          aria-label="Note source editor"
           value={sourceValue}
           onChange={doc.onSourceInput}
           onKeyDown={(e) => { if (e.key === 'Escape') setState({ suggest: null }); }}

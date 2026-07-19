@@ -82,6 +82,7 @@ export default function DailyCaptureModal({ vm }: { vm: NotesAppVM }) {
 
         <div style={{ padding: '16px 18px' }}>
           <textarea
+            aria-label="Daily capture entry"
             value={state.dailyCaptureText}
             onChange={(e) => setState({ dailyCaptureText: e.target.value })}
             onKeyDown={onKeyDown}

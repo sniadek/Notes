@@ -183,6 +183,7 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
               <span style={{ font: '11px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>{'{{date}} · {{weekday}} · {{time}}'}</span>
             </div>
             <textarea
+              aria-label="Daily note template"
               value={state.dailyTemplate}
               onChange={(e) => setState({ dailyTemplate: e.target.value })}
               rows={5}
@@ -193,6 +194,7 @@ export default function SettingsModal({ vm }: { vm: NotesAppVM }) {
           <div style={{ padding: '8px 0', borderTop: '1px solid var(--border-soft)' }}>
             <div style={{ font: '14px -apple-system,system-ui', color: 'var(--text-secondary)', marginBottom: 8 }}>Daily prompts <span style={{ color: 'var(--text-faintest)', fontSize: 12 }}>· one per line, seeded as a checklist on new days</span></div>
             <textarea
+              aria-label="Daily prompts"
               value={state.dailyPrompts.join('\n')}
               onChange={(e) => setState({ dailyPrompts: e.target.value.split('\n') })}
               rows={3}
