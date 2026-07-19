@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "test": "npm --prefix app test",
+    "test:bridge": "npm --prefix bridge test",
+    "mcp": "npm --prefix bridge run mcp",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "PWDEBUG=1 playwright test --debug",
