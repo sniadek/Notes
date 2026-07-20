@@ -37,7 +37,7 @@ export default function App() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Sidebar vm={vm} />
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--bg-surface)', position: 'relative' }}>
+        <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, background: 'var(--bg-surface)', position: 'relative' }}>
           {/* Single tab bar shared across the editor + split (preview) columns. */}
           <TabBar vm={vm} />
 
@@ -117,7 +117,7 @@ export default function App() {
 
           <FindReplace vm={vm} />
           <SuggestPopup vm={vm} />
-        </div>
+        </main>
 
         {railVisible && <ContextRail vm={vm} />}
       </div>

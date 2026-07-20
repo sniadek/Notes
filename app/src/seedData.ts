@@ -216,12 +216,15 @@ export const backlinkMap: Record<string, Backlink[]> = {
   ],
 };
 
+// Colors come from CSS vars (index.css), not literal hex — each badge's fg/bg pair is
+// tuned per theme (default/cowork/midnight use very different underlying surfaces), so a
+// single hardcoded hex here can't stay AA-compliant across all three at once.
 export const badgeColors: Record<string, { c: string; b: string }> = {
-  md: { c: '#6c7686', b: 'rgba(108,118,134,.14)' },
-  html: { c: '#b5651d', b: 'rgba(181,101,29,.14)' },
-  eml: { c: '#3a6ea5', b: 'rgba(58,110,165,.14)' },
-  pdf: { c: '#b3382c', b: 'rgba(179,56,44,.14)' },
-  image: { c: '#2e7d5b', b: 'rgba(46,125,91,.14)' },
+  md: { c: 'var(--badge-md-fg)', b: 'var(--badge-md-bg)' },
+  html: { c: 'var(--badge-html-fg)', b: 'var(--badge-html-bg)' },
+  eml: { c: 'var(--badge-eml-fg)', b: 'var(--badge-eml-bg)' },
+  pdf: { c: 'var(--badge-pdf-fg)', b: 'var(--badge-pdf-bg)' },
+  image: { c: 'var(--badge-image-fg)', b: 'var(--badge-image-bg)' },
 };
 
 export const typeLabels: Record<string, string> = {

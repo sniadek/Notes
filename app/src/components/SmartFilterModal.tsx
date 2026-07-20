@@ -87,13 +87,13 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
 
   return (
     <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'rgba(30,28,24,.28)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '10vh', zIndex: 52, animation: 'fade .12s ease' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+      <div role="dialog" aria-modal="true" aria-label="Smart filter" onClick={(e) => e.stopPropagation()} style={{ width: 480, maxWidth: '92vw', background: 'var(--bg-surface)', borderRadius: 14, boxShadow: 'var(--shadow-modal)', border: '1px solid rgba(0,0,0,.08)', overflow: 'hidden', animation: 'pop .14s ease', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '14px 18px', borderBottom: '1px solid var(--border)' }}>
           <span style={{ font: '600 14.5px -apple-system,system-ui', color: 'var(--text-primary)' }}>{editing ? 'Edit smart filter' : 'New smart filter'}</span>
           <span onClick={close} style={{ marginLeft: 'auto', color: 'var(--text-muted)', fontSize: 16, cursor: 'pointer' }}>×</span>
         </div>
 
-        <div className="sc" style={{ padding: '16px 18px', overflow: 'auto', flex: 1 }}>
+        <div className="sc" tabIndex={0} style={{ padding: '16px 18px', overflow: 'auto', flex: 1 }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
             <input
               value={label}
@@ -139,6 +139,7 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
             {rules.map((rule, i) => (
               <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 <select
+                  aria-label="Filter field"
                   value={rule.field}
                   onChange={(e) => updateRule(i, { field: e.target.value as FilterField, value: defaultValueFor(e.target.value as FilterField) })}
                   style={selectStyle}
@@ -147,7 +148,7 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
                 </select>
 
                 {rule.field === 'type' && (
-                  <select value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle}>
+                  <select aria-label="Filter value" value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle}>
                     <option value="md">Markdown</option>
                     <option value="html">HTML</option>
                     <option value="eml">Email</option>
@@ -156,19 +157,20 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
                   </select>
                 )}
                 {rule.field === 'pinned' && (
-                  <select value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle}>
+                  <select aria-label="Filter value" value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle}>
                     <option value="true">Yes</option>
                     <option value="false">No</option>
                   </select>
                 )}
                 {rule.field === 'folder' && (
-                  <select value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle}>
+                  <select aria-label="Filter value" value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle}>
                     <option value="">Choose…</option>
                     {allFolderNames.map((n) => <option key={n} value={n}>{n}</option>)}
                   </select>
                 )}
                 {rule.field === 'tag' && (
                   <input
+                    aria-label="Filter value"
                     list="filter-tag-options"
                     value={rule.value}
                     onChange={(e) => updateRule(i, { value: e.target.value })}
@@ -177,13 +179,14 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
                   />
                 )}
                 {(rule.field === 'text' || rule.field === 'filename' || rule.field === 'frontmatterTitle' || rule.field === 'description' || rule.field === 'resource') && (
-                  <input value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} placeholder="value" style={inputStyle} />
+                  <input aria-label="Filter value" value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} placeholder="value" style={inputStyle} />
                 )}
                 {(rule.field === 'createdAfter' || rule.field === 'createdBefore' || rule.field === 'timestampAfter' || rule.field === 'timestampBefore') && (
-                  <input type="date" value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle} />
+                  <input aria-label="Filter value" type="date" value={rule.value} onChange={(e) => updateRule(i, { value: e.target.value })} style={inputStyle} />
                 )}
                 {rule.field === 'conceptType' && (
                   <input
+                    aria-label="Filter value"
                     list="filter-concept-type-options"
                     value={rule.value}
                     onChange={(e) => updateRule(i, { value: e.target.value })}
@@ -198,6 +201,7 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
                   return (
                     <>
                       <input
+                        aria-label="Filter key"
                         list="filter-frontmatter-key-options"
                         value={key}
                         onChange={(e) => updateRule(i, { value: e.target.value + ':' + val })}
@@ -205,6 +209,7 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
                         style={{ ...inputStyle, flex: 'none', width: 100 }}
                       />
                       <input
+                        aria-label="Filter value"
                         value={val}
                         onChange={(e) => updateRule(i, { value: key + ':' + e.target.value })}
                         placeholder="value"
@@ -238,8 +243,8 @@ export default function SmartFilterModal({ vm }: { vm: NotesAppVM }) {
           <span
             onClick={save}
             style={{
-              font: '500 12.5px -apple-system,system-ui', color: '#fff', padding: '7px 15px', borderRadius: 8, cursor: canSave ? 'pointer' : 'default',
-              background: canSave ? 'var(--accent)' : 'var(--text-faintest)',
+              font: '500 12.5px -apple-system,system-ui', color: canSave ? 'var(--on-accent)' : '#fff', padding: '7px 15px', borderRadius: 8, cursor: canSave ? 'pointer' : 'default',
+              background: canSave ? 'var(--accent)' : 'var(--disabled-bg)',
             }}
           >
             Save

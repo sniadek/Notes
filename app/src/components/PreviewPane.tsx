@@ -148,7 +148,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
 
   if (isMd) {
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         <div
           key={file?.id}
           ref={doc.previewElRef}
@@ -217,7 +217,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
       </span>
     );
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* Primary pane's Desktop/Tablet/Mobile + Open in browser controls live in the
              right rail (ContextRail) instead — the secondary (split) pane has no rail
@@ -299,7 +299,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
       + esc(emlData.from) + '</div><div style="display:flex;gap:8px;font:12px ui-monospace,Menlo,monospace;color:var(--text-muted)"><span style="color:var(--text-faintest);width:42px">To</span>'
       + esc(emlData.to) + '</div></div><div style="padding:26px 28px">' + safeBody + '</div></div>';
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         <div ref={doc.previewElRef} dangerouslySetInnerHTML={{ __html: card }} />
       </div>
     );
@@ -307,7 +307,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
 
   if (isPdf) {
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         {pdfSrc ? (
           <iframe key={file?.id} src={pdfSrc} title="pdf preview" style={{ width: '100%', height: '100%', border: 'none' }} />
         ) : (
@@ -321,7 +321,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
 
   if (isImage) {
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         {imageSrc ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
             <img

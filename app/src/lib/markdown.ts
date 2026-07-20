@@ -93,9 +93,9 @@ export function highlight(code: string): string {
   const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return escaped.replace(re, (m, com, str, kw, num) =>
     com ? '<span style="color:var(--text-tertiary)">' + com + '</span>'
-      : str ? '<span style="color:#1a8a4f">' + str + '</span>'
-      : kw ? '<span style="color:oklch(0.5 0.16 295);font-weight:600">' + kw + '</span>'
-      : num ? '<span style="color:#b5651d">' + num + '</span>'
+      : str ? '<span style="color:var(--status-success)">' + str + '</span>'
+      : kw ? '<span style="color:var(--syntax-keyword);font-weight:600">' + kw + '</span>'
+      : num ? '<span style="color:var(--badge-html-fg)">' + num + '</span>'
       : m
   );
 }
@@ -128,11 +128,11 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
           mermaidBlocks[mid] = code.join('\n');
           // data-mmd-src carries the diagram source through the DOM: the rendered SVG replaces
           // the div's content, so htmlToMd can only recover the fence from this attribute.
-          html += '<div class="mmd" data-mmd="' + mid + '" data-mmd-src="' + esc(code.join('\n')) + '" style="border:1px solid var(--border);border-radius:9px;padding:18px;margin:0 0 18px;background:var(--bg-subtle);overflow:auto;text-align:center;color:var(--text-tertiary);font:12px ui-monospace,Menlo,monospace">◇ rendering diagram…</div>';
+          html += '<div class="mmd" tabindex="0" data-mmd="' + mid + '" data-mmd-src="' + esc(code.join('\n')) + '" style="border:1px solid var(--border);border-radius:9px;padding:18px;margin:0 0 18px;background:var(--bg-subtle);overflow:auto;text-align:center;color:var(--text-tertiary);font:12px ui-monospace,Menlo,monospace">◇ rendering diagram…</div>';
         } else {
           const id = idPrefix + 'cb' + (cbN++);
           codeBlocks[id] = code.join('\n');
-          html += '<div data-lang="' + esc(lang) + '" style="border:1px solid var(--border);border-radius:9px;overflow:hidden;margin:0 0 18px;background:var(--bg-subtle)"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font:11px ui-monospace,Menlo,monospace;color:var(--text-tertiary)"><span>' + esc(lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:var(--accent)">Copy</span></div><pre style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:var(--text-primary);overflow:auto">' + highlight(code.join('\n')) + '</pre></div>';
+          html += '<div data-lang="' + esc(lang) + '" style="border:1px solid var(--border);border-radius:9px;overflow:hidden;margin:0 0 18px;background:var(--bg-subtle)"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font:11px ui-monospace,Menlo,monospace;color:var(--text-tertiary)"><span>' + esc(lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:var(--accent)">Copy</span></div><pre tabindex="0" style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:var(--text-primary);overflow:auto">' + highlight(code.join('\n')) + '</pre></div>';
         }
         code = []; inCode = false; lang = '';
       } else { close(); inCode = true; lang = line.trim().slice(3); }
@@ -143,7 +143,7 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
       close();
       const done = /\[x\]/i.test(line);
       const text = line.replace(/^-\s\[( |x)\]\s/i, '');
-      html += '<div data-task="' + (i + taskOffset) + '" style="display:flex;align-items:flex-start;gap:9px;font:400 15.5px/1.6 -apple-system,system-ui;margin:0 0 5px;cursor:pointer"><span style="width:17px;height:17px;margin-top:3px;border-radius:5px;border:1.5px solid ' + (done ? 'var(--accent)' : 'var(--border)') + ';background:' + (done ? 'var(--accent)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;flex:none">' + (done ? '✓' : '') + '</span><span style="' + (done ? 'color:var(--text-tertiary);text-decoration:line-through' : 'color:var(--text-secondary)') + '">' + inline(text, wiki) + '</span></div>';
+      html += '<div data-task="' + (i + taskOffset) + '" style="display:flex;align-items:flex-start;gap:9px;font:400 15.5px/1.6 -apple-system,system-ui;margin:0 0 5px;cursor:pointer"><span style="width:17px;height:17px;margin-top:3px;border-radius:5px;border:1.5px solid ' + (done ? 'var(--accent)' : 'var(--border)') + ';background:' + (done ? 'var(--accent)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:var(--on-accent);font-size:11px;flex:none">' + (done ? '✓' : '') + '</span><span style="' + (done ? 'color:var(--text-tertiary);text-decoration:line-through' : 'color:var(--text-secondary)') + '">' + inline(text, wiki) + '</span></div>';
     } else if (line.startsWith('### ')) {
       close(); const t = line.slice(4);
       html += '<h3 id="' + slug(t) + '" style="font:600 16px -apple-system,system-ui;color:var(--text-primary);margin:22px 0 8px">' + inline(t, wiki) + '</h3>';

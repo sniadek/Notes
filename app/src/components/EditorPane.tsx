@@ -31,7 +31,7 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
 
   if (isEml) {
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         <div style={{ padding: '22px 24px', maxWidth: 680 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div style={{ font: '600 13px -apple-system,system-ui', color: 'var(--text-primary)' }}>Email Template</div>
@@ -62,6 +62,7 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
             <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span style={labelStyle}>BODY · HTML</span>
               <textarea
+                aria-label="Email body"
                 value={emlData.body}
                 onChange={(e) => file && vm.setEml(file.id, 'body', e.target.value)}
                 style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '12px 13px', font: '12.5px/1.7 ui-monospace,Menlo,monospace', color: 'var(--text-secondary)', background: 'var(--bg-surface)', outline: 'none', resize: 'none', minHeight: 280 }}
@@ -75,8 +76,9 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
 
   if (isMd || isHtml) {
     return (
-      <div className="sc" style={paneStyle}>
+      <div className="sc" tabIndex={0} style={paneStyle}>
         <textarea
+          aria-label="Note source editor"
           value={sourceValue}
           onChange={doc.onSourceInput}
           onKeyDown={(e) => { if (e.key === 'Escape') setState({ suggest: null }); }}
