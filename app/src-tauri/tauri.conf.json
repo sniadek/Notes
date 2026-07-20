@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Notes",
+  "productName": "Cyberdyne Systems",
   "version": "0.1.0",
   "identifier": "com.sniadek.notes",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Notes",
+        "title": "Cyberdyne Systems",
         "width": 1320,
         "height": 820,
         "minWidth": 760,
