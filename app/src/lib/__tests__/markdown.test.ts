@@ -69,6 +69,53 @@ describe('mdToHtml', () => {
     expect(html).not.toMatch(/onclick="alert/);
   });
 
+  it('renders inline links, and leaves unsafe schemes as literal text', () => {
+    const { html } = mdToHtml('See [Current State](#current-state) and [x](javascript:alert(1))', false);
+    expect(html).toContain('<a href="#current-state"');
+    expect(html).toContain('>Current State</a>');
+    // The unsafe one stays inert literal text rather than becoming a clickable href.
+    expect(html).not.toMatch(/<a[^>]+javascript:/);
+    expect(html).toContain('[x](javascript:alert(1))');
+  });
+
+  it('joins a soft-wrapped paragraph into one block', () => {
+    const { html } = mdToHtml('Full wipe of the previous install,\nrebuilt clean from scratch.', false);
+    expect(html.match(/<p /g)).toHaveLength(1);
+    expect(html).toContain('install, rebuilt clean');
+  });
+
+  it('renders thematic breaks instead of literal dashes', () => {
+    const { html } = mdToHtml('a\n\n---\n\nb', false);
+    expect(html).toContain('<hr');
+    expect(html).not.toContain('>---<');
+  });
+
+  it('renders ordered lists and nested items as real lists', () => {
+    const { html } = mdToHtml('1. first\n2. second\n   - nested\n', false);
+    expect(html).toContain('<ol');
+    expect(html).toContain('<li style="margin-bottom:5px">first</li>');
+    expect(html).toContain('<ul');
+    expect(html).toContain('nested');
+  });
+
+  it('renders emphasis and strikethrough but leaves snake_case alone', () => {
+    const { html } = mdToHtml('*soft* and ~~gone~~ but not snake_case_name', false);
+    expect(html).toContain('<em>soft</em>');
+    expect(html).toContain('<del');
+    expect(html).toContain('snake_case_name');
+  });
+
+  it('does not apply emphasis inside code spans', () => {
+    const { html } = mdToHtml('`a_b_c` and `**x**`', false);
+    expect(html).not.toContain('<em>');
+    expect(html).toContain('**x**');
+  });
+
+  it('renders h4-h6', () => {
+    const { html } = mdToHtml('#### Deep', false);
+    expect(html).toContain('<h4 id="deep"');
+  });
+
   it('renders tables with alignment', () => {
     const { html } = mdToHtml('| a | b |\n| :-- | --: |\n| 1 | 2 |', false);
     expect(html).toContain('<table');
@@ -85,6 +132,21 @@ describe('htmlToMd round-trip', () => {
     expect(back).toContain('- [x] done thing');
     expect(back).toContain('- item one');
     expect(back).toContain('**bold**');
+  });
+
+  it('preserves nested and ordered lists through a render cycle', () => {
+    const src = '1. first\n2. second\n   - nested a\n   - nested b';
+    const back = htmlToMd(mdToHtml(src, false).html);
+    expect(back).toContain('1. first');
+    expect(back).toContain('2. second');
+    expect(back).toContain('  - nested a');
+    expect(back).toContain('  - nested b');
+  });
+
+  it('preserves links and thematic breaks through a render cycle', () => {
+    const back = htmlToMd(mdToHtml('[docs](https://example.com)\n\n---\n\ntail', false).html);
+    expect(back).toContain('[docs](https://example.com)');
+    expect(back).toContain('---');
   });
 
   it('preserves code fence language through a render cycle', () => {

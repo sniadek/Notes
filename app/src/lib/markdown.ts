@@ -77,13 +77,42 @@ export function parseFrontCached(id: string, md: string): FrontMatter {
   return fm;
 }
 
+const CODE_STYLE = 'font:13px ui-monospace,Menlo,monospace;background:var(--bg-subtle);padding:1px 6px;border-radius:4px;color:var(--text-secondary)';
+
+// Only these schemes become live hrefs. `javascript:`/`data:` links would execute in the
+// preview (which renders this HTML directly), so anything else is left as literal text.
+const SAFE_URL = /^(?:https?:\/\/|mailto:|tel:|#|\/|\.{1,2}\/)/i;
+
+function safeUrl(u: string): string {
+  // esc() has already run, so the raw text is attribute-safe; only the scheme needs vetting.
+  const t = u.trim();
+  return SAFE_URL.test(t) ? t : '';
+}
+
 export function inline(s: string, wiki: boolean): string {
   s = esc(s);
+  // Code spans are pulled out first and restored last (fenced by a private-use sentinel that
+  // can't occur in note text): their contents are literal, so bold,
+  // emphasis, link and math rules must never see inside them.
+  const codes: string[] = [];
+  s = s.replace(/`([^`]+)`/g, (_m, c) => '\uE000' + (codes.push(c) - 1) + '\uE000');
   s = s.replace(/\$([^$\n]+)\$/g, (_m, tex) => '<span data-tex="' + tex + '">' + tex + '</span>');
-  s = s.replace(/`([^`]+)`/g, '<code style="font:13px ui-monospace,Menlo,monospace;background:var(--bg-subtle);padding:1px 6px;border-radius:4px;color:var(--text-secondary)">$1</code>');
   if (wiki) s = s.replace(/\[\[([^\]]+)\]\]/g, '<span data-wiki="$1" style="color:var(--accent);border-bottom:1.5px solid var(--accent-soft);font-weight:500;cursor:pointer">$1</span>');
+  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+[^)]*)?\)/g, (m, alt, url) => {
+    const href = safeUrl(url);
+    return href ? '<img src="' + href + '" alt="' + alt + '" style="max-width:100%;border-radius:6px">' : m;
+  });
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+[^)]*)?\)/g, (m, text, url) => {
+    const href = safeUrl(url);
+    return href ? '<a href="' + href + '" style="color:var(--accent);text-decoration:none;border-bottom:1px solid var(--accent-soft)">' + text + '</a>' : m;
+  });
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700;color:var(--text-primary)">$1</strong>');
-  return s;
+  s = s.replace(/~~([^~\n]+)~~/g, '<del style="color:var(--text-tertiary)">$1</del>');
+  // Emphasis runs after bold so `**x**` is already consumed. The leading capture group stands
+  // in for a lookbehind (WKWebView support) and keeps `snake_case` / `2 * 3 * 4` intact.
+  s = s.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+  s = s.replace(/(^|[^_\w])_([^_\n]+)_(?![\w_])/g, '$1<em>$2</em>');
+  return s.replace(/\uE000(\d+)\uE000/g, (_m, n) => '<code style="' + CODE_STYLE + '">' + codes[+n] + '</code>');
 }
 
 export function highlight(code: string): string {
@@ -100,6 +129,101 @@ export function highlight(code: string): string {
   );
 }
 
+const HR_RE = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/;
+const TASK_RE = /^-\s\[( |x)\]\s/i;
+const LIST_RE = /^(\s*)(?:([-*+])|(\d+)[.)])\s+(.*)$/;
+const HEAD_RE = /^(#{1,6})\s+(.*)$/;
+const QUOTE_RE = /^>\s?/;
+const HEAD_STYLE: Record<number, string> = {
+  1: 'font:700 30px/1.25 -apple-system,system-ui;color:var(--text-primary);margin:0 0 14px;letter-spacing:-.012em',
+  2: 'font:600 21px/1.3 -apple-system,system-ui;color:var(--text-primary);margin:30px 0 10px;letter-spacing:-.008em',
+  3: 'font:600 17px/1.35 -apple-system,system-ui;color:var(--text-primary);margin:22px 0 7px',
+  4: 'font:600 15.5px/1.4 -apple-system,system-ui;color:var(--text-primary);margin:18px 0 6px',
+  5: 'font:600 14px/1.4 -apple-system,system-ui;color:var(--text-secondary);margin:16px 0 5px',
+  6: 'font:600 13px/1.4 -apple-system,system-ui;color:var(--text-tertiary);margin:16px 0 5px;text-transform:uppercase;letter-spacing:.04em',
+};
+const BODY_FONT = 'font:400 15.5px/1.72 -apple-system,system-ui;color:var(--text-secondary)';
+
+function isTableAt(lines: string[], i: number): boolean {
+  return /^\|.*\|\s*$/.test(lines[i].trim()) &&
+    i + 1 < lines.length &&
+    /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1].trim());
+}
+
+// A soft-wrapped source line continues the current paragraph/quote unless it opens a block of
+// its own — this is what keeps one authored paragraph from rendering as N spaced-out <p>s.
+function startsBlock(lines: string[], i: number): boolean {
+  const l = lines[i];
+  return l.trim() === '' || l.trim().startsWith('```') || HR_RE.test(l) || HEAD_RE.test(l) ||
+    QUOTE_RE.test(l) || TASK_RE.test(l) || LIST_RE.test(l) || isTableAt(lines, i);
+}
+
+// Trailing double-space (or backslash) is markdown's hard break; everything else folds to a
+// single space, matching how the source reads as prose.
+function joinSoft(raw: string[], wiki: boolean): string {
+  return raw.map((l, idx) => {
+    const br = idx < raw.length - 1 && /(?: {2,}|\\)$/.test(l);
+    return inline(l.trim(), wiki) + (br ? '<br>' : idx < raw.length - 1 ? ' ' : '');
+  }).join('');
+}
+
+interface ListItem { ordered: boolean; text: string; children: ListItem[]; }
+
+// Consumes one contiguous list block (blank lines between items included) and nests items by
+// their source indentation. Returns the index of the last line it took.
+function collectList(lines: string[], start: number): { items: ListItem[]; end: number } {
+  const flat: { indent: number; ordered: boolean; text: string }[] = [];
+  let i = start;
+  let end = start;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim() === '') {
+      let j = i + 1;
+      while (j < lines.length && lines[j].trim() === '') j++;
+      if (j < lines.length && LIST_RE.test(lines[j]) && !TASK_RE.test(lines[j])) { i = j - 1; continue; }
+      break;
+    }
+    if (TASK_RE.test(line)) break;
+    const m = LIST_RE.exec(line);
+    if (m) {
+      flat.push({ indent: m[1].replace(/\t/g, '  ').length, ordered: !m[2], text: m[4] });
+      end = i;
+      continue;
+    }
+    // Lazy continuation: an indented line with no marker belongs to the item above it.
+    if (flat.length && /^\s{2,}\S/.test(line)) { flat[flat.length - 1].text += ' ' + line.trim(); end = i; continue; }
+    break;
+  }
+  const roots: ListItem[] = [];
+  const stack: { indent: number; items: ListItem[] }[] = [{ indent: -1, items: roots }];
+  flat.forEach((f) => {
+    while (stack.length > 1 && f.indent <= stack[stack.length - 1].indent) stack.pop();
+    const node: ListItem = { ordered: f.ordered, text: f.text, children: [] };
+    stack[stack.length - 1].items.push(node);
+    stack.push({ indent: f.indent, items: node.children });
+  });
+  return { items: roots, end };
+}
+
+function renderList(items: ListItem[], wiki: boolean, depth: number): string {
+  let out = '';
+  let i = 0;
+  while (i < items.length) {
+    // Sibling runs of different marker types become separate lists rather than one mixed one.
+    const ordered = items[i].ordered;
+    const run: ListItem[] = [];
+    while (i < items.length && items[i].ordered === ordered) run.push(items[i++]);
+    const tag = ordered ? 'ol' : 'ul';
+    const style = BODY_FONT + ';margin:' + (depth ? '5px 0 0' : '0 0 16px') +
+      ';padding-left:' + (ordered ? 26 : 23) + 'px;list-style:' + (ordered ? 'decimal' : 'disc');
+    out += '<' + tag + ' style="' + style + '">' + run.map((it) =>
+      '<li style="margin-bottom:5px">' + inline(it.text, wiki) +
+      (it.children.length ? renderList(it.children, wiki, depth + 1) : '') + '</li>'
+    ).join('') + '</' + tag + '>';
+  }
+  return out;
+}
+
 export interface MdRenderResult {
   html: string;
   codeBlocks: Record<string, string>;
@@ -112,12 +236,10 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
   let inCode = false;
   let code: string[] = [];
   let lang = '';
-  let inList = false;
   let cbN = 0;
   let mmdN = 0;
   const codeBlocks: Record<string, string> = {};
   const mermaidBlocks: Record<string, string> = {};
-  const close = () => { if (inList) { html += '</ul>'; inList = false; } };
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -135,39 +257,30 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
           html += '<div data-lang="' + esc(lang) + '" style="border:1px solid var(--border);border-radius:9px;overflow:hidden;margin:0 0 18px;background:var(--bg-subtle)"><div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-bottom:1px solid var(--border);font:11px ui-monospace,Menlo,monospace;color:var(--text-tertiary)"><span>' + esc(lang || 'text') + '</span><span data-copy="' + id + '" style="cursor:pointer;color:var(--accent)">Copy</span></div><pre tabindex="0" style="margin:0;padding:13px 16px;font:13.5px/1.7 ui-monospace,Menlo,monospace;color:var(--text-primary);overflow:auto">' + highlight(code.join('\n')) + '</pre></div>';
         }
         code = []; inCode = false; lang = '';
-      } else { close(); inCode = true; lang = line.trim().slice(3); }
+      } else { inCode = true; lang = line.trim().slice(3); }
       continue;
     }
     if (inCode) { code.push(line); continue; }
-    if (/^-\s\[( |x)\]\s/i.test(line)) {
-      close();
+    if (TASK_RE.test(line)) {
       const done = /\[x\]/i.test(line);
       const text = line.replace(/^-\s\[( |x)\]\s/i, '');
       html += '<div data-task="' + (i + taskOffset) + '" style="display:flex;align-items:flex-start;gap:9px;font:400 15.5px/1.6 -apple-system,system-ui;margin:0 0 5px;cursor:pointer"><span style="width:17px;height:17px;margin-top:3px;border-radius:5px;border:1.5px solid ' + (done ? 'var(--accent)' : 'var(--border)') + ';background:' + (done ? 'var(--accent)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:var(--on-accent);font-size:11px;flex:none">' + (done ? '✓' : '') + '</span><span style="' + (done ? 'color:var(--text-tertiary);text-decoration:line-through' : 'color:var(--text-secondary)') + '">' + inline(text, wiki) + '</span></div>';
-    } else if (line.startsWith('### ')) {
-      close(); const t = line.slice(4);
-      html += '<h3 id="' + slug(t) + '" style="font:600 16px -apple-system,system-ui;color:var(--text-primary);margin:22px 0 8px">' + inline(t, wiki) + '</h3>';
-    } else if (line.startsWith('## ')) {
-      close(); const t = line.slice(3);
-      html += '<h2 id="' + slug(t) + '" style="font:600 20px -apple-system,system-ui;color:var(--text-primary);margin:28px 0 12px">' + inline(t, wiki) + '</h2>';
-    } else if (line.startsWith('# ')) {
-      close(); const t = line.slice(2);
-      html += '<h1 id="' + slug(t) + '" style="font:700 30px/1.2 -apple-system,system-ui;color:var(--text-primary);margin:0 0 14px;letter-spacing:-.012em">' + inline(t, wiki) + '</h1>';
-    } else if (/^>\s/.test(line)) {
-      close();
-      html += '<blockquote style="border-left:3px solid var(--accent-soft);padding:2px 0 2px 14px;margin:0 0 16px;color:var(--text-secondary);font:400 15.5px/1.7 -apple-system,system-ui">' + inline(line.slice(2), wiki) + '</blockquote>';
-    } else if (/^\d+\.\s/.test(line)) {
-      close();
-      html += '<div style="font:400 15.5px/1.75 -apple-system,system-ui;color:var(--text-secondary);margin:0 0 6px">' + inline(line, wiki) + '</div>';
-    } else if (/^[-*]\s/.test(line)) {
-      if (!inList) { html += '<ul style="font:400 15.5px/1.85 -apple-system,system-ui;color:var(--text-secondary);margin:0 0 16px;padding-left:22px">'; inList = true; }
-      html += '<li style="margin-bottom:4px">' + inline(line.slice(2), wiki) + '</li>';
-    } else if (
-      /^\|.*\|\s*$/.test(line.trim()) &&
-      i + 1 < lines.length &&
-      /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(lines[i + 1].trim())
-    ) {
-      close();
+    } else if (HR_RE.test(line)) {
+      html += '<hr style="border:none;border-top:1px solid var(--border);margin:26px 0">';
+    } else if (HEAD_RE.test(line)) {
+      const [, hashes, t] = HEAD_RE.exec(line)!;
+      const lvl = hashes.length;
+      html += '<h' + lvl + ' id="' + slug(t) + '" style="' + HEAD_STYLE[lvl] + '">' + inline(t, wiki) + '</h' + lvl + '>';
+    } else if (QUOTE_RE.test(line)) {
+      const buf: string[] = [];
+      while (i < lines.length && QUOTE_RE.test(lines[i])) buf.push(lines[i++].replace(QUOTE_RE, ''));
+      i--;
+      html += '<blockquote style="border-left:3px solid var(--accent-soft);padding:2px 0 2px 14px;margin:0 0 16px;' + BODY_FONT + '">' + joinSoft(buf, wiki) + '</blockquote>';
+    } else if (LIST_RE.test(line)) {
+      const { items, end } = collectList(lines, i);
+      html += renderList(items, wiki, 0);
+      i = end;
+    } else if (isTableAt(lines, i)) {
       const parseRow = (l: string) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
       const headerCells = parseRow(line);
       const aligns = parseRow(lines[i + 1]).map((a) => {
@@ -191,14 +304,12 @@ export function mdToHtml(md: string, wiki: boolean, idPrefix = '', taskOffset = 
         '<thead><tr>' + headerCells.map((c, ci) => '<th style="' + cellStyle(aligns[ci] || 'left', true) + '">' + inline(c, wiki) + '</th>').join('') + '</tr></thead>' +
         '<tbody>' + bodyRows.map((row) => '<tr>' + row.map((c, ci) => '<td style="' + cellStyle(aligns[ci] || 'left', false) + '">' + inline(c, wiki) + '</td>').join('') + '</tr>').join('') + '</tbody>' +
         '</table>';
-    } else if (line.trim() === '') {
-      close();
-    } else {
-      close();
-      html += '<p style="font:400 15.5px/1.75 -apple-system,system-ui;color:var(--text-secondary);margin:0 0 16px">' + inline(line, wiki) + '</p>';
+    } else if (line.trim() !== '') {
+      const buf = [line];
+      while (i + 1 < lines.length && !startsBlock(lines, i + 1)) buf.push(lines[++i]);
+      html += '<p style="' + BODY_FONT + ';margin:0 0 16px">' + joinSoft(buf, wiki) + '</p>';
     }
   }
-  close();
   return { html, codeBlocks, mermaidBlocks };
 }
 
@@ -251,6 +362,8 @@ function inlineToMd(el: Node): string {
     const tag = e.tagName?.toLowerCase();
     if (tag === 'strong' || tag === 'b') out += '**' + inlineToMd(e) + '**';
     else if (tag === 'em' || tag === 'i') out += '*' + inlineToMd(e) + '*';
+    else if (tag === 'del' || tag === 's') out += '~~' + inlineToMd(e) + '~~';
+    else if (tag === 'img') out += '![' + (e.getAttribute('alt') || '') + '](' + (e.getAttribute('src') || '') + ')';
     else if (tag === 'code') out += '`' + (e.textContent || '') + '`';
     else if (tag === 'a') out += '[' + inlineToMd(e) + '](' + (e.getAttribute('href') || '') + ')';
     else if (tag === 'br') out += '\n';
@@ -259,6 +372,22 @@ function inlineToMd(el: Node): string {
     // survives in the attribute, so recursing into the children would emit garbage.
     else if (e.hasAttribute && e.hasAttribute('data-tex')) out += '$' + e.getAttribute('data-tex') + '$';
     else out += inlineToMd(e);
+  });
+  return out;
+}
+
+// Walks a <ul>/<ol> into markdown lines, recursing into nested lists inside each <li> and
+// indenting them two spaces per level (the shape collectList reads back).
+function listToMd(el: Element, depth: number): string[] {
+  const ordered = el.tagName.toLowerCase() === 'ol';
+  const out: string[] = [];
+  let n = 1;
+  el.querySelectorAll(':scope > li').forEach((li) => {
+    const nested = Array.from(li.children).filter((c) => /^(ul|ol)$/i.test(c.tagName));
+    const own = li.cloneNode(true) as HTMLElement;
+    Array.from(own.children).forEach((c) => { if (/^(ul|ol)$/i.test(c.tagName)) c.remove(); });
+    out.push('  '.repeat(depth) + (ordered ? n++ + '. ' : '- ') + inlineToMd(own).trim());
+    nested.forEach((sub) => out.push(...listToMd(sub, depth + 1)));
   });
   return out;
 }
@@ -275,12 +404,13 @@ export function htmlToMd(html: string): string {
     }
     const e = n as HTMLElement;
     const tag = e.tagName?.toLowerCase();
-    if (tag === 'h1') lines.push('# ' + inlineToMd(e).trim());
-    else if (tag === 'h2') lines.push('## ' + inlineToMd(e).trim());
-    else if (tag === 'h3') lines.push('### ' + inlineToMd(e).trim());
+    if (/^h[1-6]$/.test(tag)) lines.push('#'.repeat(+tag[1]) + ' ' + inlineToMd(e).trim());
+    else if (tag === 'hr') lines.push('---');
     else if (tag === 'blockquote') lines.push('> ' + inlineToMd(e).trim());
-    else if (tag === 'ul') {
-      e.querySelectorAll(':scope > li').forEach((li) => lines.push('- ' + inlineToMd(li).trim()));
+    else if (tag === 'ul' || tag === 'ol') {
+      // One list = one block: emitting each item separately would let the '\n\n' join below
+      // turn every list into a loose one, and nested items would be dropped entirely.
+      lines.push(listToMd(e, 0).join('\n'));
     } else if (tag === 'pre') {
       const code = e.querySelector('code');
       lines.push('```\n' + (code ? code.textContent : e.textContent) + '\n```');
