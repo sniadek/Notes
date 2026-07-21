@@ -152,6 +152,7 @@ export default function PreviewPane({ vm, pane = 'primary' }: { vm: NotesAppVM; 
         <div
           key={file?.id}
           ref={doc.previewElRef}
+          data-preview-root
           contentEditable
           suppressContentEditableWarning
           style={{

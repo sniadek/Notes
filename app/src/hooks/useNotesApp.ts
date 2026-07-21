@@ -1217,11 +1217,35 @@ export function useNotesApp(showRightSidebar = true) {
     if (navigator.clipboard) navigator.clipboard.writeText(currentExportHtml(targetId));
   }, [currentExportHtml]);
 
-  // ---- preview click delegation (copy / task / wiki) ----
+  // ---- preview click delegation (copy / task / wiki / link) ----
   const codeBlocksRef = useRef<Record<string, string>>({});
   const codeBlocksRef2 = useRef<Record<string, string>>({});
+
+  // The preview is contenteditable, so anchors don't navigate on their own: in-document
+  // `#heading` links scroll the pane, everything else opens outside the app.
+  const followLink = useCallback(async (a: HTMLAnchorElement) => {
+    const href = a.getAttribute('href') || '';
+    if (href.startsWith('#')) {
+      const el = a.closest('[data-preview-root], body')?.querySelector('[id="' + CSS.escape(href.slice(1)) + '"]');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (isTauri()) {
+      try {
+        const { openUrl } = await import('@tauri-apps/plugin-opener');
+        await openUrl(href);
+      } catch (err) {
+        console.error('Failed to open link:', err);
+      }
+      return;
+    }
+    window.open(href, '_blank', 'noopener,noreferrer');
+  }, []);
   const onPreviewClick = useCallback((e: MouseEvent) => {
-    const target = (e.target as HTMLElement).closest('[data-copy],[data-task],[data-wiki]') as HTMLElement | null;
+    const el = e.target as HTMLElement;
+    const link = el.closest('a[href]') as HTMLAnchorElement | null;
+    if (link) { e.preventDefault(); followLink(link); return; }
+    const target = el.closest('[data-copy],[data-task],[data-wiki]') as HTMLElement | null;
     if (!target) return;
     if (target.hasAttribute('data-copy')) {
       const raw = codeBlocksRef.current[target.getAttribute('data-copy')!];
@@ -1233,12 +1257,15 @@ export function useNotesApp(showRightSidebar = true) {
     }
     if (target.hasAttribute('data-task')) { toggleTask(+target.getAttribute('data-task')!); return; }
     if (target.hasAttribute('data-wiki')) { openOrCreate(target.getAttribute('data-wiki')!); return; }
-  }, [openOrCreate, toggleTask]);
+  }, [followLink, openOrCreate, toggleTask]);
 
   // secondary (split) pane mirror of onPreviewClick above — copies from its own
   // codeBlocksRef2 and toggles tasks against the secondary doc, not the active one.
   const onPreviewClickSecondary = useCallback((e: MouseEvent) => {
-    const target = (e.target as HTMLElement).closest('[data-copy],[data-task],[data-wiki]') as HTMLElement | null;
+    const el = e.target as HTMLElement;
+    const link = el.closest('a[href]') as HTMLAnchorElement | null;
+    if (link) { e.preventDefault(); followLink(link); return; }
+    const target = el.closest('[data-copy],[data-task],[data-wiki]') as HTMLElement | null;
     if (!target) return;
     if (target.hasAttribute('data-copy')) {
       const raw = codeBlocksRef2.current[target.getAttribute('data-copy')!];
@@ -1250,7 +1277,7 @@ export function useNotesApp(showRightSidebar = true) {
     }
     if (target.hasAttribute('data-task')) { toggleTask(+target.getAttribute('data-task')!, stateRef.current.secondaryId); return; }
     if (target.hasAttribute('data-wiki')) { openOrCreate(target.getAttribute('data-wiki')!); return; }
-  }, [openOrCreate, toggleTask]);
+  }, [followLink, openOrCreate, toggleTask]);
 
   // ---- source input + suggestions ----
   // Each pane resolves its own note directly (activeId/secondaryId) instead of "whichever is
