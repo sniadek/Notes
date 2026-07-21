@@ -8,7 +8,6 @@ import PreviewPane from './components/PreviewPane';
 import StatusBar from './components/StatusBar';
 import ContextRail from './components/ContextRail';
 import FindReplace from './components/FindReplace';
-import SuggestPopup from './components/SuggestPopup';
 import CommandPalette from './components/CommandPalette';
 import HistoryModal from './components/HistoryModal';
 import GraphModal from './components/GraphModal';
@@ -116,7 +115,6 @@ export default function App() {
               )}
 
           <FindReplace vm={vm} />
-          <SuggestPopup vm={vm} />
         </main>
 
         {railVisible && <ContextRail vm={vm} />}
