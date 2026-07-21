@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, MouseEvent, SyntheticEvent } from 'react';
+import type { MouseEvent, SyntheticEvent } from 'react';
 import katex from 'katex';
 import mermaid from 'mermaid';
 import {
-  badgeColors, files as filesSeed, slashDefs, typeLabels,
+  badgeColors, files as filesSeed, typeLabels,
 } from '../seedData';
+import type { SourceEditorHandle } from '../components/SourceEditor';
+import { lintSource } from '../lib/editor/lint';
 import { loadPersistedState, savePersistedState, type PersistedState } from '../lib/persist';
 import {
   diffLines, esc, htmlToMd, mdToHtml, outlineHtml, outlineMd, parseEml, parseFront, parseFrontCached, slug, wordCount,
@@ -25,8 +27,6 @@ import {
 import { isSupportedFile, mergeNoteContent, typeFromFilename } from '../lib/vaultFile';
 import type { CustomFilter, EmlData, FileType, FilterRule, HtmlWidth, NoteFile, TaskPriority, ViewMode } from '../types';
 
-interface Suggest { kind: 'wiki' | 'slash'; q: string; caret: number; pane: 'primary' | 'secondary'; }
-
 export interface FolderNode {
   path: string;
   name: string;
@@ -34,10 +34,24 @@ export interface FolderNode {
   children: FolderNode[];
 }
 
+// Which corpus the command palette searches. 'all' is the original behaviour (titles +
+// full text + commands); the rest narrow it and drop commands, since picking a scope is
+// itself a statement that the user is searching, not running something.
+export type PaletteScope = 'all' | 'folders' | 'edited' | 'created' | 'tasks';
+
+export const PALETTE_SCOPES: { id: PaletteScope; label: string; placeholder: string }[] = [
+  { id: 'all', label: 'All', placeholder: 'Search files and folders, or type a command…' },
+  { id: 'folders', label: 'Folders', placeholder: 'Search folders…' },
+  { id: 'edited', label: 'Recently edited', placeholder: 'Filter recently edited notes…' },
+  { id: 'created', label: 'Recently created', placeholder: 'Filter recently created notes…' },
+  { id: 'tasks', label: 'Tasks', placeholder: 'Search tasks across all notes…' },
+];
+
 interface EphemeralState {
   paletteOpen: boolean;
   paletteQuery: string;
   paletteIdx: number;
+  paletteScope: PaletteScope;
   settingsOpen: boolean;
   findOpen: boolean;
   findQuery: string;
@@ -66,7 +80,6 @@ interface EphemeralState {
   // Separate flag for the split pane's breadcrumb export menu, so opening one column's
   // Export menu doesn't also pop the other column's.
   exportOpenSecondary: boolean;
-  suggest: Suggest | null;
   smartFilterModalOpen: boolean;
   editingFilterId: string | null;
   lastSyncedAt: number | null;
@@ -88,7 +101,7 @@ interface EphemeralState {
 
 function ephemeralDefaults(): EphemeralState {
   return {
-    paletteOpen: false, paletteQuery: '', paletteIdx: 0,
+    paletteOpen: false, paletteQuery: '', paletteIdx: 0, paletteScope: 'all',
     settingsOpen: false,
     findOpen: false, findQuery: '', replaceQuery: '', findRegex: false,
     historyOpen: false, historyPick: 0, historyTargetId: null,
@@ -98,7 +111,6 @@ function ephemeralDefaults(): EphemeralState {
     shortcutsOpen: false,
     exportOpen: false,
     exportOpenSecondary: false,
-    suggest: null,
     smartFilterModalOpen: false,
     editingFilterId: null,
     lastSyncedAt: null,
@@ -332,7 +344,7 @@ export function useNotesApp(showRightSidebar = true) {
   }, [fileOf, state.sources]);
 
   // refs
-  const sourceElRef = useRef<HTMLTextAreaElement | null>(null);
+  const sourceElRef = useRef<SourceEditorHandle | null>(null);
   const previewElRef = useRef<HTMLDivElement | null>(null);
   const paletteInputRef = useRef<HTMLInputElement | null>(null);
   const addTaskInputRef = useRef<HTMLInputElement | null>(null);
@@ -341,9 +353,9 @@ export function useNotesApp(showRightSidebar = true) {
   const captureUndoRef = useRef<{ id: string; prevSource: string } | null>(null);
   const mermaidBlocksRef = useRef<Record<string, string>>({});
   // secondary (split) pane refs — mirror the primary pane's refs above. Both panes can be
-  // independently editable, so the secondary gets its own source textarea ref too.
+  // independently editable, so the secondary gets its own source editor ref too.
   const previewElRef2 = useRef<HTMLDivElement | null>(null);
-  const sourceElRef2 = useRef<HTMLTextAreaElement | null>(null);
+  const sourceElRef2 = useRef<SourceEditorHandle | null>(null);
   const mermaidBlocksRef2 = useRef<Record<string, string>>({});
 
   const touch = useCallback((id: string) => {
@@ -552,6 +564,10 @@ export function useNotesApp(showRightSidebar = true) {
       sources: { ...s.sources, [id]: body },
       activeId: id,
       openTabs: [...s.openTabs, id],
+      // Stamped here the same as in newFile/duplicateFile: without it, notes born from a
+      // followed [[wikilink]] or the "New Markdown Note" command were missing from
+      // recentlyCreated and the palette's Recently created scope forever.
+      createdAt: { ...s.createdAt, [id]: Date.now() },
     }));
   }, [all, open, setState, vaultPath]);
 
@@ -1098,6 +1114,18 @@ export function useNotesApp(showRightSidebar = true) {
   // above, but keyed per-folder via a synthetic 'folder:<path>' id instead of one constant.
   const openFolder = useCallback((path: string) => setState({ activeId: 'folder:' + path, secondaryId: null }), [setState]);
 
+  // Expands the sidebar down to a folder by unfolding each ancestor along its path. Keys
+  // match collapseAllFolders' 'folder:<path>' convention. Used when arriving at a folder
+  // from somewhere other than the tree itself (the command palette), so the sidebar
+  // doesn't stay collapsed around the folder you just opened.
+  const expandToFolder = useCallback((path: string) => {
+    const segments = path.split('/');
+    const keys = segments.map((_, i) => 'folder:' + segments.slice(0, i + 1).join('/'));
+    setState((s) => ({
+      expandedDocs: { ...s.expandedDocs, ...Object.fromEntries(keys.map((k) => [k, true])) },
+    }));
+  }, [setState]);
+
   const openAddTask = useCallback(() => setState({
     addTaskOpen: true, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
   }), [setState]);
@@ -1279,63 +1307,28 @@ export function useNotesApp(showRightSidebar = true) {
     if (target.hasAttribute('data-wiki')) { openOrCreate(target.getAttribute('data-wiki')!); return; }
   }, [followLink, openOrCreate, toggleTask]);
 
-  // ---- source input + suggestions ----
+  // ---- source input ----
   // Each pane resolves its own note directly (activeId/secondaryId) instead of "whichever is
   // focused" — both panes can be independently editable, so this is no longer focus-dependent.
-  const onSourceInput = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
+  // The [[wiki]] / slash suggestion matching that used to live here now runs as CodeMirror
+  // completion sources (lib/editor/complete.ts), so this only has to store the new text.
+  const onSourceInput = useCallback((v: string) => {
     const id = stateRef.current.activeId;
     if (!id) return;
-    const v = e.target.value;
-    const caret = e.target.selectionStart;
-    const before = v.slice(0, caret);
-    let sug: Suggest | null = null;
-    const mw = /\[\[([^\]\n]*)$/.exec(before);
-    const ms = /(?:^|\n)\/(\w*)$/.exec(before);
-    if (mw) sug = { kind: 'wiki', q: mw[1], caret, pane: 'primary' };
-    else if (ms) sug = { kind: 'slash', q: ms[1], caret, pane: 'primary' };
-    setState((s) => ({ sources: { ...s.sources, [id]: v }, suggest: sug }));
+    setState((s) => ({ sources: { ...s.sources, [id]: v } }));
     touch(id);
     markDirty(id);
   }, [markDirty, setState, touch]);
 
   // secondary (split) pane mirror of onSourceInput above — same duplication convention as
   // onPreviewClick/onPreviewClickSecondary.
-  const onSourceInputSecondary = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
+  const onSourceInputSecondary = useCallback((v: string) => {
     const id = stateRef.current.secondaryId;
     if (!id) return;
-    const v = e.target.value;
-    const caret = e.target.selectionStart;
-    const before = v.slice(0, caret);
-    let sug: Suggest | null = null;
-    const mw = /\[\[([^\]\n]*)$/.exec(before);
-    const ms = /(?:^|\n)\/(\w*)$/.exec(before);
-    if (mw) sug = { kind: 'wiki', q: mw[1], caret, pane: 'secondary' };
-    else if (ms) sug = { kind: 'slash', q: ms[1], caret, pane: 'secondary' };
-    setState((s) => ({ sources: { ...s.sources, [id]: v }, suggest: sug }));
+    setState((s) => ({ sources: { ...s.sources, [id]: v } }));
     touch(id);
     markDirty(id);
   }, [markDirty, setState, touch]);
-
-  const pickSuggest = useCallback((item: string) => {
-    const sg = stateRef.current.suggest;
-    if (!sg) return;
-    const isSecondary = sg.pane === 'secondary';
-    const id = isSecondary ? stateRef.current.secondaryId : stateRef.current.activeId;
-    if (!id) return;
-    const v = stateRef.current.sources[id] || '';
-    const caret = sg.caret;
-    const removeLen = (sg.kind === 'wiki' ? 2 : 1) + sg.q.length;
-    const start = caret - removeLen;
-    const insert = sg.kind === 'wiki' ? '[[' + item + ']]' : item;
-    const nv = v.slice(0, start) + insert + v.slice(caret);
-    setState({ sources: { ...stateRef.current.sources, [id]: nv }, suggest: null });
-    markDirty(id);
-    const el = isSecondary ? sourceElRef2.current : sourceElRef.current;
-    if (el) {
-      const pos = start + insert.length;
-      setTimeout(() => { try { el.focus(); el.setSelectionRange(pos, pos); } catch { /* ignore */ } }, 10);
-    }
-  }, [markDirty, setState]);
 
   const selectPreviewTextInSource = useCallback((text: string, pane: 'primary' | 'secondary' = 'primary') => {
     const t = text.trim();
@@ -1347,10 +1340,8 @@ export function useNotesApp(showRightSidebar = true) {
     if (idx === -1) return;
     const el = isSecondary ? sourceElRef2.current : sourceElRef.current;
     if (!el) return;
+    // The handle focuses and scrolls the range into view itself — no manual scrollTop math.
     el.setSelectionRange(idx, idx + t.length);
-    const lineHeight = 25;
-    const line = el.value.slice(0, idx).split('\n').length - 1;
-    el.scrollTop = Math.max(0, line * lineHeight - el.clientHeight / 2);
   }, []);
 
   const scrollTo = useCallback((id: string) => {
@@ -1367,7 +1358,7 @@ export function useNotesApp(showRightSidebar = true) {
       const meta = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       const s = stateRef.current;
-      if (meta && k === 'k') { e.preventDefault(); setState((s2) => ({ paletteOpen: !s2.paletteOpen, paletteQuery: '', paletteIdx: 0 })); }
+      if (meta && k === 'k') { e.preventDefault(); setState((s2) => ({ paletteOpen: !s2.paletteOpen, paletteQuery: '', paletteIdx: 0, paletteScope: 'all' })); }
       else if (meta && k === 'f' && s.activeId) { e.preventDefault(); setState((s2) => ({ findOpen: !s2.findOpen })); }
       else if (meta && k === 'g') { e.preventDefault(); setState((s2) => ({ graphOpen: !s2.graphOpen })); }
       else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); openAddTask(); }
@@ -1384,7 +1375,7 @@ export function useNotesApp(showRightSidebar = true) {
       else if (meta && /^[1-9]$/.test(e.key)) { const i = +e.key - 1; if (s.openTabs[i]) { e.preventDefault(); open(s.openTabs[i]); } }
       else if (meta && e.shiftKey && e.key === '|') { e.preventDefault(); setState((s2) => ({ railHidden: !s2.railHidden })); }
       else if (meta && e.key === '\\') { e.preventDefault(); setState((s2) => ({ collapsed: !s2.collapsed })); }
-      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, historyTargetId: null, graphOpen: false, addTaskOpen: false, dailyCaptureOpen: false, shortcutsOpen: false, exportOpen: false, exportOpenSecondary: false, suggest: null, smartFilterModalOpen: false }); }
+      else if (e.key === 'Escape') { setState({ paletteOpen: false, settingsOpen: false, findOpen: false, historyOpen: false, historyTargetId: null, graphOpen: false, addTaskOpen: false, dailyCaptureOpen: false, shortcutsOpen: false, exportOpen: false, exportOpenSecondary: false, smartFilterModalOpen: false }); }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -1587,10 +1578,70 @@ export function useNotesApp(showRightSidebar = true) {
     return { nodes, edges };
   }, [all, bodyOf, state.activeId, state.graphOpen, state.sources, state.eml]);
 
-  // command palette results — full-text search across the vault, only while it's open
+  // tasks (aggregated from checkbox lines across all markdown notes)
+  const tasks = useMemo(() => scanTasks(all, state.sources), [all, state.sources]);
+  const taskCounts = useMemo(
+    () => tasks.filter((t) => !t.done && (isOverdue(t.due) || isToday(t.due))).length,
+    [tasks],
+  );
+
+  // command palette results — full-text search across the vault, only while it's open.
+  // state.paletteScope (cycled with Tab) picks the corpus; the narrowed scopes are plain
+  // filters over data the app already derives, and skip commands and body-text search.
   const paletteResults = useMemo(() => {
     if (!state.paletteOpen) return [];
     const trimmed = state.paletteQuery.trim();
+
+    if (state.paletteScope === 'tasks') {
+      const tq = trimmed.toLowerCase();
+      return tasks
+        .filter((t) => !tq || t.text.toLowerCase().includes(tq) || t.fileTitle.toLowerCase().includes(tq))
+        // Open tasks first, then by due date — the same "what needs doing" ordering the
+        // task manager uses. Undated tasks sort last within each group.
+        .sort((a, b) => (+a.done - +b.done) || (a.due || '9999').localeCompare(b.due || '9999'))
+        .slice(0, 50)
+        .map((t) => ({
+          kind: 'task' as const,
+          // The task id (fileId:line) keeps sibling tasks in one note distinct as list
+          // keys; fileId is carried separately so opening doesn't have to parse it back.
+          id: t.id,
+          fileId: t.fileId,
+          title: t.text,
+          hint: t.due ? t.fileTitle + ' · ' + t.due : t.fileTitle,
+          icon: t.done ? '☑' : '☐',
+        }));
+    }
+
+    // Folder results come from folderOrder (the authoritative list, seeded plus whatever a
+    // vault scan discovered) rather than folderTree, which is already pruned by the active
+    // smart filter — searching shouldn't be silently limited by what the sidebar is showing.
+    const folderHits = (q: string) => state.folderOrder
+      .filter((path) => !q || path.toLowerCase().includes(q))
+      // Shallow folders first, then alphabetically: a top-level "Engineering" is a more
+      // likely target than "Engineering/Archive/2019".
+      .sort((a, b) => (folderPathDepth(a) - folderPathDepth(b)) || a.localeCompare(b))
+      .map((path) => ({
+        kind: 'folder' as const,
+        id: path,
+        title: folderLeafName(path),
+        hint: folderParentPath(path) || 'folder',
+        icon: '▸',
+      }));
+
+    if (state.paletteScope === 'folders') return folderHits(trimmed.toLowerCase()).slice(0, 50);
+
+    if (state.paletteScope === 'edited' || state.paletteScope === 'created') {
+      const stamps = state.paletteScope === 'edited' ? state.editedAt : state.createdAt;
+      const rq = trimmed.toLowerCase();
+      return all
+        .filter((f) => stamps[f.id] && (!rq || f.title.toLowerCase().includes(rq) || f.file.toLowerCase().includes(rq)))
+        .sort((a, b) => stamps[b.id] - stamps[a.id])
+        .slice(0, 30)
+        .map((f) => ({
+          kind: 'file' as const, id: f.id, title: f.title, hint: agoLabel(stamps[f.id]), icon: f.type.toUpperCase(),
+        }));
+    }
+
     // A `@daily` prefix scopes both the title and text search to notes in the daily folder
     // only — stripped before matching, so the rest of the query behaves identically.
     const dailyOnly = /^@daily\b/i.test(trimmed);
@@ -1630,11 +1681,23 @@ export function useNotesApp(showRightSidebar = true) {
       { title: 'Open Settings', run: 'settings' },
     ].filter((c) => !q || c.title.toLowerCase().includes(q))
       .map((c) => ({ kind: 'cmd' as const, id: c.run, title: c.title, hint: 'command', icon: '⌘' }));
-    return [...fileResults, ...textResults, ...cmds];
-  }, [all, bodyOf, state.paletteOpen, state.paletteQuery, state.sources, state.eml]);
+    // Folders join the All scope only once something is typed: with an empty query the
+    // palette is a "recent files + commands" launcher, and listing every folder there
+    // would bury both. Browsing the full list is what the Folders scope is for.
+    // @daily is a note-scoped search, so folders stay out of it entirely.
+    const folderResults = q && !dailyOnly ? folderHits(q).slice(0, 8) : [];
+    return [...fileResults, ...folderResults, ...textResults, ...cmds];
+  }, [all, bodyOf, tasks, state.paletteOpen, state.paletteQuery, state.paletteScope,
+    state.editedAt, state.createdAt, state.folderOrder, state.sources, state.eml]);
 
-  const runPaletteResult = useCallback((r: { kind: string; id: string }) => {
+  const runPaletteResult = useCallback((r: { kind: string; id: string; fileId?: string }) => {
     if (r.kind === 'file' || r.kind === 'text') { setState({ paletteOpen: false }); open(r.id); return; }
+    // A task result opens the note that holds the line — same landing as a text hit, since
+    // the palette has no way to know whether the note will come up in source or preview.
+    if (r.kind === 'task' && r.fileId) { setState({ paletteOpen: false }); open(r.fileId); return; }
+    // Folders open into the folder browser pane and expand the sidebar down to them, the
+    // same pair of actions the sidebar's own reveal does.
+    if (r.kind === 'folder') { setState({ paletteOpen: false }); expandToFolder(r.id); openFolder(r.id); return; }
     // Unlike the other commands, this one keeps the palette open — it's priming a scoped
     // search, not finishing an action — and refocuses the input so typing resumes seamlessly.
     if (r.id === 'searchDaily') {
@@ -1657,7 +1720,7 @@ export function useNotesApp(showRightSidebar = true) {
       case 'window': try { window.open(location.href, '_blank'); } catch { /* ignore */ } break;
       case 'settings': setState({ settingsOpen: true }); break;
     }
-  }, [generateWeeklyReview, open, openAddTask, openDaily, openOrCreate, openTaskManager, setState]);
+  }, [expandToFolder, generateWeeklyReview, open, openAddTask, openDaily, openFolder, openOrCreate, openTaskManager, setState]);
 
   // find & replace — targets whichever pane is focused (same as onSourceInput), not always
   // the primary file, since findNextFn below already implicitly follows focus via sourceElRef.
@@ -1695,20 +1758,19 @@ export function useNotesApp(showRightSidebar = true) {
     if (m && m[0].length) { el.focus(); el.setSelectionRange(m.index, m.index + m[0].length); }
   }, []);
 
-  // suggestions
-  let suggestItems: { label: string; hint: string; icon: string; isCreate?: boolean }[] = [];
-  let suggestTitle = '';
-  if (state.suggest) {
-    const sq = state.suggest.q.toLowerCase();
-    if (state.suggest.kind === 'wiki') {
-      suggestTitle = 'LINK TO NOTE';
-      suggestItems = all.filter((f) => f.title.toLowerCase().includes(sq)).slice(0, 5).map((f) => ({ label: f.title, hint: f.type, icon: '🔗' }));
-      if (sq && !all.some((f) => f.title.toLowerCase() === sq)) suggestItems.push({ label: 'Create "' + state.suggest!.q + '"', hint: 'new', icon: '＋', isCreate: true });
-    } else {
-      suggestTitle = 'INSERT BLOCK';
-      suggestItems = slashDefs.filter((d) => d.label.toLowerCase().includes(sq)).map((d) => ({ label: d.ins, hint: d.hint, icon: '▦' }));
-    }
-  }
+  // Note titles + per-pane problem counts feed the editor: titles drive [[wikilink]]
+  // completion and the "no such note" lint, the counts drive the StatusBar. lintSource is
+  // the same pure function the editor's inline linter runs, so the two can't disagree.
+  const noteTitles = useMemo(() => all.map((f) => f.title), [all]);
+  const titleSet = useMemo(() => new Set(noteTitles), [noteTitles]);
+  const problems = useMemo(
+    () => (isMd ? lintSource(sourceValue, titleSet) : []),
+    [isMd, sourceValue, titleSet],
+  );
+  const secondaryProblems = useMemo(
+    () => (secondaryDoc.isMd ? lintSource(secondaryDoc.sourceValue, titleSet) : []),
+    [secondaryDoc.isMd, secondaryDoc.sourceValue, titleSet],
+  );
 
   // history
   // canHistory drives the primary breadcrumb's History button; the modal itself keys off
@@ -1741,13 +1803,6 @@ export function useNotesApp(showRightSidebar = true) {
     .filter((f) => state.createdAt[f.id])
     .sort((a, b) => state.createdAt[b.id] - state.createdAt[a.id])
     .slice(0, 10), [all, state.createdAt]);
-
-  // tasks (aggregated from checkbox lines across all markdown notes)
-  const tasks = useMemo(() => scanTasks(all, state.sources), [all, state.sources]);
-  const taskCounts = useMemo(
-    () => tasks.filter((t) => !t.done && (isOverdue(t.due) || isToday(t.due))).length,
-    [tasks],
-  );
 
   // pinned
   const pinnedFiles = useMemo(() => all.filter((f) => f.pinned), [all]);
@@ -2205,6 +2260,7 @@ export function useNotesApp(showRightSidebar = true) {
     onPreviewClick: onPreviewClickSecondary,
     sourceElRef: sourceElRef2,
     onSourceInput: onSourceInputSecondary,
+    problems: secondaryProblems,
     showSource: secondaryShowSource,
     showPreview: secondaryShowPreview,
   };
@@ -2217,7 +2273,7 @@ export function useNotesApp(showRightSidebar = true) {
     sourceValue, mdHtml, outline, words, activeTags, frontMatter, emlData,
     backlinks, backlinkCount: backlinks.length, unlinked, graph, paletteResults, runPaletteResult,
     findCount, replaceAllFn, findNextFn,
-    suggestItems, suggestTitle, pickSuggest,
+    noteTitles, problems,
     canHistory, historyFile, historyList: hist, snap, diffRows, saveSnapshot, restore,
     recentDocs, recentlyCreated, tagCount, fileFrontMatter, conceptTypeOptions, frontmatterKeyOptions, folderTree, pathSegments,
     secondaryPathSegments, secondaryActiveTags, secondaryCanHistory,

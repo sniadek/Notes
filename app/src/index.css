@@ -139,14 +139,16 @@ body {
 textarea, input { font-family: inherit; }
 .mono { font-family: ui-monospace, Menlo, monospace; }
 
-.sc::-webkit-scrollbar { width: 9px; height: 9px; }
-.sc::-webkit-scrollbar-thumb {
+/* .cm-scroller is listed alongside .sc because CodeMirror owns its own scroll container —
+   the class can't be put on it from JSX the way every other scroller in the app does. */
+.sc::-webkit-scrollbar, .cm-scroller::-webkit-scrollbar { width: 9px; height: 9px; }
+.sc::-webkit-scrollbar-thumb, .cm-scroller::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, .16);
   border-radius: 9px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-.sc::-webkit-scrollbar-track { background: transparent; }
+.sc::-webkit-scrollbar-track, .cm-scroller::-webkit-scrollbar-track { background: transparent; }
 
 @keyframes pop { from { transform: translateY(-8px) scale(.985); } to { transform: none; } }
 @keyframes fade { from { opacity: .55; } to { opacity: 1; } }

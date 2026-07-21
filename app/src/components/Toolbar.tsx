@@ -318,10 +318,10 @@ export default function Toolbar({ vm }: { vm: NotesAppVM }) {
       </IconBtn>
 
       {compactSearch ? (
-        <IconBtn title="Go to file or command (⌘K)" onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })} style={{ fontSize: 13 }}>⌕</IconBtn>
+        <IconBtn title="Go to file or command (⌘K)" onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0, paletteScope: 'all' })} style={{ fontSize: 13 }}>⌕</IconBtn>
       ) : (
         <div
-          onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
+          onClick={() => setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0, paletteScope: 'all' })}
           style={{ flex: 1, minWidth: 0, maxWidth: 440, height: 30, borderRadius: 8, background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', padding: '0 12px', gap: 9, color: 'var(--text-tertiary)', fontSize: 12.5, cursor: 'text', overflow: 'hidden' }}
           onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--hover)'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--bg-subtle)'; }}

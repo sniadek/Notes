@@ -1,12 +1,12 @@
 import type { NotesAppVM } from '../hooks/useNotesApp';
 import { FONT_SCALES } from '../lib/utils';
+import SourceEditor from './SourceEditor';
 
 const labelStyle = { font: '600 10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faint)', letterSpacing: '.04em' } as const;
 const inputStyle = { border: '1px solid var(--border)', borderRadius: 8, padding: '9px 11px', font: '14px -apple-system,system-ui', color: 'var(--text-primary)', background: 'var(--bg-surface)', outline: 'none' } as const;
 const monoInputStyle = { ...inputStyle, font: '13px ui-monospace,Menlo,monospace', color: 'var(--text-secondary)' };
 
 export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; pane?: 'primary' | 'secondary' }) {
-  const { setState } = vm;
   const secondary = pane === 'secondary';
   // Both panes can be independently editable at once, so each gets its own source ref/handler
   // (vm.secondary.sourceElRef/onSourceInput for the right column) instead of a shared pair.
@@ -75,20 +75,17 @@ export default function EditorPane({ vm, pane = 'primary' }: { vm: NotesAppVM; p
   }
 
   if (isMd || isHtml) {
+    // CodeMirror owns its own scroller, so this wrapper drops the `sc` scroll container the
+    // textarea needed — nesting the two would give the pane two competing scrollbars.
     return (
-      <div className="sc" tabIndex={0} style={paneStyle}>
-        <textarea
-          aria-label="Note source editor"
+      <div style={{ ...paneStyle, overflow: 'hidden', display: 'flex' }}>
+        <SourceEditor
           value={sourceValue}
           onChange={doc.onSourceInput}
-          onKeyDown={(e) => { if (e.key === 'Escape') setState({ suggest: null }); }}
-          ref={doc.sourceElRef}
-          spellCheck={false}
-          style={{
-            width: '100%', height: '100%', border: 'none', outline: 'none', resize: 'none', padding: '24px 28px',
-            font: '13.5px/1.85 ui-monospace,Menlo,monospace', color: 'var(--text-secondary)', background: 'transparent',
-            zoom: FONT_SCALES[vm.state.docFontSize],
-          }}
+          noteTitles={vm.noteTitles}
+          fontScale={FONT_SCALES[vm.state.docFontSize]}
+          ariaLabel={secondary ? 'Note source editor (split)' : 'Note source editor'}
+          editorRef={doc.sourceElRef}
         />
       </div>
     );
