@@ -37,10 +37,11 @@ export interface FolderNode {
 // Which corpus the command palette searches. 'all' is the original behaviour (titles +
 // full text + commands); the rest narrow it and drop commands, since picking a scope is
 // itself a statement that the user is searching, not running something.
-export type PaletteScope = 'all' | 'edited' | 'created' | 'tasks';
+export type PaletteScope = 'all' | 'folders' | 'edited' | 'created' | 'tasks';
 
 export const PALETTE_SCOPES: { id: PaletteScope; label: string; placeholder: string }[] = [
-  { id: 'all', label: 'All', placeholder: 'Search files, or type a command…' },
+  { id: 'all', label: 'All', placeholder: 'Search files and folders, or type a command…' },
+  { id: 'folders', label: 'Folders', placeholder: 'Search folders…' },
   { id: 'edited', label: 'Recently edited', placeholder: 'Filter recently edited notes…' },
   { id: 'created', label: 'Recently created', placeholder: 'Filter recently created notes…' },
   { id: 'tasks', label: 'Tasks', placeholder: 'Search tasks across all notes…' },
@@ -1113,6 +1114,18 @@ export function useNotesApp(showRightSidebar = true) {
   // above, but keyed per-folder via a synthetic 'folder:<path>' id instead of one constant.
   const openFolder = useCallback((path: string) => setState({ activeId: 'folder:' + path, secondaryId: null }), [setState]);
 
+  // Expands the sidebar down to a folder by unfolding each ancestor along its path. Keys
+  // match collapseAllFolders' 'folder:<path>' convention. Used when arriving at a folder
+  // from somewhere other than the tree itself (the command palette), so the sidebar
+  // doesn't stay collapsed around the folder you just opened.
+  const expandToFolder = useCallback((path: string) => {
+    const segments = path.split('/');
+    const keys = segments.map((_, i) => 'folder:' + segments.slice(0, i + 1).join('/'));
+    setState((s) => ({
+      expandedDocs: { ...s.expandedDocs, ...Object.fromEntries(keys.map((k) => [k, true])) },
+    }));
+  }, [setState]);
+
   const openAddTask = useCallback(() => setState({
     addTaskOpen: true, addTaskText: '', addTaskDue: '', addTaskPriority: '', addTaskTargetId: null,
   }), [setState]);
@@ -1599,6 +1612,24 @@ export function useNotesApp(showRightSidebar = true) {
         }));
     }
 
+    // Folder results come from folderOrder (the authoritative list, seeded plus whatever a
+    // vault scan discovered) rather than folderTree, which is already pruned by the active
+    // smart filter — searching shouldn't be silently limited by what the sidebar is showing.
+    const folderHits = (q: string) => state.folderOrder
+      .filter((path) => !q || path.toLowerCase().includes(q))
+      // Shallow folders first, then alphabetically: a top-level "Engineering" is a more
+      // likely target than "Engineering/Archive/2019".
+      .sort((a, b) => (folderPathDepth(a) - folderPathDepth(b)) || a.localeCompare(b))
+      .map((path) => ({
+        kind: 'folder' as const,
+        id: path,
+        title: folderLeafName(path),
+        hint: folderParentPath(path) || 'folder',
+        icon: '▸',
+      }));
+
+    if (state.paletteScope === 'folders') return folderHits(trimmed.toLowerCase()).slice(0, 50);
+
     if (state.paletteScope === 'edited' || state.paletteScope === 'created') {
       const stamps = state.paletteScope === 'edited' ? state.editedAt : state.createdAt;
       const rq = trimmed.toLowerCase();
@@ -1650,15 +1681,23 @@ export function useNotesApp(showRightSidebar = true) {
       { title: 'Open Settings', run: 'settings' },
     ].filter((c) => !q || c.title.toLowerCase().includes(q))
       .map((c) => ({ kind: 'cmd' as const, id: c.run, title: c.title, hint: 'command', icon: '⌘' }));
-    return [...fileResults, ...textResults, ...cmds];
+    // Folders join the All scope only once something is typed: with an empty query the
+    // palette is a "recent files + commands" launcher, and listing every folder there
+    // would bury both. Browsing the full list is what the Folders scope is for.
+    // @daily is a note-scoped search, so folders stay out of it entirely.
+    const folderResults = q && !dailyOnly ? folderHits(q).slice(0, 8) : [];
+    return [...fileResults, ...folderResults, ...textResults, ...cmds];
   }, [all, bodyOf, tasks, state.paletteOpen, state.paletteQuery, state.paletteScope,
-    state.editedAt, state.createdAt, state.sources, state.eml]);
+    state.editedAt, state.createdAt, state.folderOrder, state.sources, state.eml]);
 
   const runPaletteResult = useCallback((r: { kind: string; id: string; fileId?: string }) => {
     if (r.kind === 'file' || r.kind === 'text') { setState({ paletteOpen: false }); open(r.id); return; }
     // A task result opens the note that holds the line — same landing as a text hit, since
     // the palette has no way to know whether the note will come up in source or preview.
     if (r.kind === 'task' && r.fileId) { setState({ paletteOpen: false }); open(r.fileId); return; }
+    // Folders open into the folder browser pane and expand the sidebar down to them, the
+    // same pair of actions the sidebar's own reveal does.
+    if (r.kind === 'folder') { setState({ paletteOpen: false }); expandToFolder(r.id); openFolder(r.id); return; }
     // Unlike the other commands, this one keeps the palette open — it's priming a scoped
     // search, not finishing an action — and refocuses the input so typing resumes seamlessly.
     if (r.id === 'searchDaily') {
@@ -1681,7 +1720,7 @@ export function useNotesApp(showRightSidebar = true) {
       case 'window': try { window.open(location.href, '_blank'); } catch { /* ignore */ } break;
       case 'settings': setState({ settingsOpen: true }); break;
     }
-  }, [generateWeeklyReview, open, openAddTask, openDaily, openOrCreate, openTaskManager, setState]);
+  }, [expandToFolder, generateWeeklyReview, open, openAddTask, openDaily, openFolder, openOrCreate, openTaskManager, setState]);
 
   // find & replace — targets whichever pane is focused (same as onSourceInput), not always
   // the primary file, since findNextFn below already implicitly follows focus via sourceElRef.
