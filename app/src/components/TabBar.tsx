@@ -212,7 +212,7 @@ export default function TabBar({ vm }: { vm: NotesAppVM }) {
         </span>
       </div>
       <div
-        onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
+        onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0, paletteScope: 'all' })}
         title="Open file (⌘K)"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, color: 'var(--text-tertiary)', fontSize: 16, cursor: 'pointer', flex: 'none' }}
         onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; }}

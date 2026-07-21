@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import type { NotesAppVM } from '../hooks/useNotesApp';
+import { PALETTE_SCOPES } from '../hooks/useNotesApp';
+import type { NotesAppVM, PaletteScope } from '../hooks/useNotesApp';
 
 export default function CommandPalette({ vm }: { vm: NotesAppVM }) {
   const { state, setState, paletteResults, runPaletteResult } = vm;
@@ -10,6 +11,15 @@ export default function CommandPalette({ vm }: { vm: NotesAppVM }) {
   if (!state.paletteOpen) return null;
 
   const close = () => setState({ paletteOpen: false });
+  const scopeIdx = PALETTE_SCOPES.findIndex((s) => s.id === state.paletteScope);
+  const scope = PALETTE_SCOPES[scopeIdx] || PALETTE_SCOPES[0];
+
+  // Switching corpus resets the highlighted row: index 3 of "recently edited" has nothing
+  // to do with index 3 of the task list.
+  const setScope = (id: PaletteScope) => {
+    setState({ paletteScope: id, paletteIdx: 0 });
+    setTimeout(() => { try { vm.paletteInputRef.current?.focus(); } catch { /* ignore */ } }, 0);
+  };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -18,6 +28,12 @@ export default function CommandPalette({ vm }: { vm: NotesAppVM }) {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setState((s) => ({ paletteIdx: Math.max(s.paletteIdx - 1, 0) }));
+    } else if (e.key === 'Tab') {
+      // Tab cycles the scope (Shift+Tab backwards) instead of leaving the input — the
+      // palette is modal, so there's nothing useful to tab to anyway.
+      e.preventDefault();
+      const next = (scopeIdx + (e.shiftKey ? -1 : 1) + PALETTE_SCOPES.length) % PALETTE_SCOPES.length;
+      setScope(PALETTE_SCOPES[next].id);
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const r = paletteResults[state.paletteIdx];
@@ -42,12 +58,41 @@ export default function CommandPalette({ vm }: { vm: NotesAppVM }) {
               onChange={(e) => setState({ paletteQuery: e.target.value, paletteIdx: 0 })}
               onKeyDown={onKeyDown}
               ref={vm.paletteInputRef}
-              placeholder="Search files, or type a command…"
+              placeholder={scope.placeholder}
               style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', font: '15px -apple-system,system-ui', color: 'var(--text-primary)' }}
             />
             <span style={{ font: '600 10px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)', background: 'var(--bg-subtle)', padding: '3px 7px', borderRadius: 5 }}>ESC</span>
           </div>
         </div>
+
+        {/* Scope switcher — click, or cycle with Tab from the input. */}
+        <div
+          role="tablist"
+          aria-label="Search scope"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: cowork ? '0 16px 10px' : '9px 14px', borderBottom: '1px solid var(--border)' }}
+        >
+          {PALETTE_SCOPES.map((s) => {
+            const active = s.id === state.paletteScope;
+            return (
+              <div
+                key={s.id}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setScope(s.id)}
+                style={{
+                  padding: '4px 10px', borderRadius: 'var(--radius-pill, 999px)', cursor: 'pointer',
+                  font: (active ? '600 ' : '500 ') + '11.5px -apple-system,system-ui',
+                  color: active ? 'var(--accent)' : 'var(--text-tertiary)',
+                  background: active ? 'var(--accent-soft)' : 'transparent',
+                }}
+              >
+                {s.label}
+              </div>
+            );
+          })}
+          <span style={{ marginLeft: 'auto', font: '10.5px ui-monospace,Menlo,monospace', color: 'var(--text-faintest)' }}>⇥ switch</span>
+        </div>
+
         <div className="sc" tabIndex={0} style={{ maxHeight: 340, overflow: 'auto', padding: 7 }}>
           {paletteResults.map((r, i) => (
             <div
@@ -66,7 +111,13 @@ export default function CommandPalette({ vm }: { vm: NotesAppVM }) {
             </div>
           ))}
           {paletteResults.length === 0 && (
-            <div style={{ padding: 22, textAlign: 'center', font: '13px -apple-system,system-ui', color: 'var(--text-faintest)' }}>No matches</div>
+            <div style={{ padding: 22, textAlign: 'center', font: '13px -apple-system,system-ui', color: 'var(--text-faintest)' }}>
+              {/* An empty query in a narrowed scope means the corpus itself is empty (no
+                  creation stamps yet, no tasks anywhere) — "no matches" would misdescribe it. */}
+              {state.paletteScope === 'all' || state.paletteQuery.trim()
+                ? 'No matches'
+                : 'Nothing in ' + scope.label.toLowerCase() + ' yet'}
+            </div>
           )}
         </div>
       </div>

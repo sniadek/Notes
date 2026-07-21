@@ -34,10 +34,23 @@ export interface FolderNode {
   children: FolderNode[];
 }
 
+// Which corpus the command palette searches. 'all' is the original behaviour (titles +
+// full text + commands); the rest narrow it and drop commands, since picking a scope is
+// itself a statement that the user is searching, not running something.
+export type PaletteScope = 'all' | 'edited' | 'created' | 'tasks';
+
+export const PALETTE_SCOPES: { id: PaletteScope; label: string; placeholder: string }[] = [
+  { id: 'all', label: 'All', placeholder: 'Search files, or type a command…' },
+  { id: 'edited', label: 'Recently edited', placeholder: 'Filter recently edited notes…' },
+  { id: 'created', label: 'Recently created', placeholder: 'Filter recently created notes…' },
+  { id: 'tasks', label: 'Tasks', placeholder: 'Search tasks across all notes…' },
+];
+
 interface EphemeralState {
   paletteOpen: boolean;
   paletteQuery: string;
   paletteIdx: number;
+  paletteScope: PaletteScope;
   settingsOpen: boolean;
   findOpen: boolean;
   findQuery: string;
@@ -87,7 +100,7 @@ interface EphemeralState {
 
 function ephemeralDefaults(): EphemeralState {
   return {
-    paletteOpen: false, paletteQuery: '', paletteIdx: 0,
+    paletteOpen: false, paletteQuery: '', paletteIdx: 0, paletteScope: 'all',
     settingsOpen: false,
     findOpen: false, findQuery: '', replaceQuery: '', findRegex: false,
     historyOpen: false, historyPick: 0, historyTargetId: null,
@@ -550,6 +563,10 @@ export function useNotesApp(showRightSidebar = true) {
       sources: { ...s.sources, [id]: body },
       activeId: id,
       openTabs: [...s.openTabs, id],
+      // Stamped here the same as in newFile/duplicateFile: without it, notes born from a
+      // followed [[wikilink]] or the "New Markdown Note" command were missing from
+      // recentlyCreated and the palette's Recently created scope forever.
+      createdAt: { ...s.createdAt, [id]: Date.now() },
     }));
   }, [all, open, setState, vaultPath]);
 
@@ -1328,7 +1345,7 @@ export function useNotesApp(showRightSidebar = true) {
       const meta = e.metaKey || e.ctrlKey;
       const k = e.key.toLowerCase();
       const s = stateRef.current;
-      if (meta && k === 'k') { e.preventDefault(); setState((s2) => ({ paletteOpen: !s2.paletteOpen, paletteQuery: '', paletteIdx: 0 })); }
+      if (meta && k === 'k') { e.preventDefault(); setState((s2) => ({ paletteOpen: !s2.paletteOpen, paletteQuery: '', paletteIdx: 0, paletteScope: 'all' })); }
       else if (meta && k === 'f' && s.activeId) { e.preventDefault(); setState((s2) => ({ findOpen: !s2.findOpen })); }
       else if (meta && k === 'g') { e.preventDefault(); setState((s2) => ({ graphOpen: !s2.graphOpen })); }
       else if (meta && e.shiftKey && k === 'n') { e.preventDefault(); openAddTask(); }
@@ -1548,10 +1565,52 @@ export function useNotesApp(showRightSidebar = true) {
     return { nodes, edges };
   }, [all, bodyOf, state.activeId, state.graphOpen, state.sources, state.eml]);
 
-  // command palette results — full-text search across the vault, only while it's open
+  // tasks (aggregated from checkbox lines across all markdown notes)
+  const tasks = useMemo(() => scanTasks(all, state.sources), [all, state.sources]);
+  const taskCounts = useMemo(
+    () => tasks.filter((t) => !t.done && (isOverdue(t.due) || isToday(t.due))).length,
+    [tasks],
+  );
+
+  // command palette results — full-text search across the vault, only while it's open.
+  // state.paletteScope (cycled with Tab) picks the corpus; the narrowed scopes are plain
+  // filters over data the app already derives, and skip commands and body-text search.
   const paletteResults = useMemo(() => {
     if (!state.paletteOpen) return [];
     const trimmed = state.paletteQuery.trim();
+
+    if (state.paletteScope === 'tasks') {
+      const tq = trimmed.toLowerCase();
+      return tasks
+        .filter((t) => !tq || t.text.toLowerCase().includes(tq) || t.fileTitle.toLowerCase().includes(tq))
+        // Open tasks first, then by due date — the same "what needs doing" ordering the
+        // task manager uses. Undated tasks sort last within each group.
+        .sort((a, b) => (+a.done - +b.done) || (a.due || '9999').localeCompare(b.due || '9999'))
+        .slice(0, 50)
+        .map((t) => ({
+          kind: 'task' as const,
+          // The task id (fileId:line) keeps sibling tasks in one note distinct as list
+          // keys; fileId is carried separately so opening doesn't have to parse it back.
+          id: t.id,
+          fileId: t.fileId,
+          title: t.text,
+          hint: t.due ? t.fileTitle + ' · ' + t.due : t.fileTitle,
+          icon: t.done ? '☑' : '☐',
+        }));
+    }
+
+    if (state.paletteScope === 'edited' || state.paletteScope === 'created') {
+      const stamps = state.paletteScope === 'edited' ? state.editedAt : state.createdAt;
+      const rq = trimmed.toLowerCase();
+      return all
+        .filter((f) => stamps[f.id] && (!rq || f.title.toLowerCase().includes(rq) || f.file.toLowerCase().includes(rq)))
+        .sort((a, b) => stamps[b.id] - stamps[a.id])
+        .slice(0, 30)
+        .map((f) => ({
+          kind: 'file' as const, id: f.id, title: f.title, hint: agoLabel(stamps[f.id]), icon: f.type.toUpperCase(),
+        }));
+    }
+
     // A `@daily` prefix scopes both the title and text search to notes in the daily folder
     // only — stripped before matching, so the rest of the query behaves identically.
     const dailyOnly = /^@daily\b/i.test(trimmed);
@@ -1592,10 +1651,14 @@ export function useNotesApp(showRightSidebar = true) {
     ].filter((c) => !q || c.title.toLowerCase().includes(q))
       .map((c) => ({ kind: 'cmd' as const, id: c.run, title: c.title, hint: 'command', icon: '⌘' }));
     return [...fileResults, ...textResults, ...cmds];
-  }, [all, bodyOf, state.paletteOpen, state.paletteQuery, state.sources, state.eml]);
+  }, [all, bodyOf, tasks, state.paletteOpen, state.paletteQuery, state.paletteScope,
+    state.editedAt, state.createdAt, state.sources, state.eml]);
 
-  const runPaletteResult = useCallback((r: { kind: string; id: string }) => {
+  const runPaletteResult = useCallback((r: { kind: string; id: string; fileId?: string }) => {
     if (r.kind === 'file' || r.kind === 'text') { setState({ paletteOpen: false }); open(r.id); return; }
+    // A task result opens the note that holds the line — same landing as a text hit, since
+    // the palette has no way to know whether the note will come up in source or preview.
+    if (r.kind === 'task' && r.fileId) { setState({ paletteOpen: false }); open(r.fileId); return; }
     // Unlike the other commands, this one keeps the palette open — it's priming a scoped
     // search, not finishing an action — and refocuses the input so typing resumes seamlessly.
     if (r.id === 'searchDaily') {
@@ -1701,13 +1764,6 @@ export function useNotesApp(showRightSidebar = true) {
     .filter((f) => state.createdAt[f.id])
     .sort((a, b) => state.createdAt[b.id] - state.createdAt[a.id])
     .slice(0, 10), [all, state.createdAt]);
-
-  // tasks (aggregated from checkbox lines across all markdown notes)
-  const tasks = useMemo(() => scanTasks(all, state.sources), [all, state.sources]);
-  const taskCounts = useMemo(
-    () => tasks.filter((t) => !t.done && (isOverdue(t.due) || isToday(t.due))).length,
-    [tasks],
-  );
 
   // pinned
   const pinnedFiles = useMemo(() => all.filter((f) => f.pinned), [all]);

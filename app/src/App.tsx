@@ -100,7 +100,7 @@ export default function App() {
                   <div style={{ fontSize: 34, color: cowork ? 'var(--accent)' : undefined }}>⌘</div>
                   <div style={{ font: cowork ? '400 22px var(--font-serif)' : '400 14px -apple-system,system-ui', color: cowork ? 'var(--text-primary)' : undefined }}>No note open</div>
                   <div
-                    onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0 })}
+                    onClick={() => vm.setState({ paletteOpen: true, paletteQuery: '', paletteIdx: 0, paletteScope: 'all' })}
                     style={cowork
                       ? {
                           font: '500 12.5px -apple-system,system-ui', color: 'var(--text-secondary)', cursor: 'pointer',

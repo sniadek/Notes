@@ -3,6 +3,7 @@ import type { NotesAppVM } from '../hooks/useNotesApp';
 
 const SHORTCUTS = [
   { label: 'Command palette / quick open', keys: '⌘K' },
+  { label: 'Palette: switch search scope', keys: '⇥' },
   { label: 'Find & replace', keys: '⌘F' },
   { label: 'Toggle edit / preview', keys: '⌘E' },
   { label: 'Graph view', keys: '⌘G' },
